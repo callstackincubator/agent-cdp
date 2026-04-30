@@ -3,7 +3,8 @@ import net from "node:net";
 import path from "node:path";
 
 import { createTargetProviders } from "./providers.js";
-import type { DaemonInfo, IpcCommand, IpcResponse, StatusInfo, TargetDescriptor } from "./types.js";
+import { SessionManager } from "./session-manager.js";
+import type { DaemonInfo, IpcCommand, IpcResponse, StatusInfo } from "./types.js";
 
 const STATE_DIR = path.join(process.env.HOME || process.env.USERPROFILE || "/tmp", ".agent-cdp");
 
@@ -18,7 +19,7 @@ function getDaemonInfoPath(): string {
 class Daemon {
   private readonly startedAt = Date.now();
   private readonly providers = createTargetProviders();
-  private readonly selectedTarget: TargetDescriptor | null = null;
+  private readonly sessionManager = new SessionManager(this.providers);
   private ipcServer: net.Server | null = null;
 
   async start(): Promise<void> {
@@ -48,8 +49,10 @@ class Daemon {
     fs.writeFileSync(getDaemonInfoPath(), JSON.stringify(info, null, 2));
 
     const shutdown = () => {
-      this.stop();
-      process.exit(0);
+      void this.sessionManager.clearTarget().finally(() => {
+        this.stop();
+        process.exit(0);
+      });
     };
 
     process.on("SIGTERM", shutdown);
@@ -107,18 +110,35 @@ class Daemon {
       return { ok: true, data: "pong" };
     }
 
+    if (command.type === "list-targets") {
+      return { ok: true, data: await this.sessionManager.listTargets(command.options) };
+    }
+
+    if (command.type === "select-target") {
+      return {
+        ok: true,
+        data: await this.sessionManager.selectTarget(command.targetId, command.options),
+      };
+    }
+
+    if (command.type === "clear-target") {
+      await this.sessionManager.clearTarget();
+      return { ok: true, data: "Target cleared" };
+    }
+
     const status: StatusInfo = {
       daemonRunning: true,
       uptime: Date.now() - this.startedAt,
-      selectedTarget: this.selectedTarget,
+      selectedTarget: this.sessionManager.getSelectedTarget(),
       providerCount: this.providers.length,
+      sessionState: this.sessionManager.getSessionState(),
     };
 
     return { ok: true, data: status };
   }
 }
 
-if (import.meta.url === new URL(process.argv[1], "file://").href) {
+if (process.argv[1] && import.meta.url === new URL(process.argv[1], "file://").href) {
   const daemon = new Daemon();
   void daemon.start();
 }

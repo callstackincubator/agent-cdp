@@ -7,6 +7,7 @@ describe("formatStatus", () => {
         daemonRunning: true,
         uptime: 2300,
         providerCount: 2,
+        sessionState: "disconnected",
         selectedTarget: null,
       }),
     ).toContain("Providers: 2");

@@ -21,9 +21,12 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {},
+  "dependencies": {
+    "ws": "^8.18.3"
+  },
   "devDependencies": {
     "@types/node": "^22.15.29",
+    "@types/ws": "^8.18.1",
     "oxfmt": "^0.17.0",
     "oxlint": "^0.17.0",
     "tsup": "^8.5.0",

@@ -3,7 +3,7 @@
 These files track the MVP slices for `agent-cdp`.
 
 - [x] `001-bootstrap-quality-gates.md`
-- [ ] `002-daemon-transport-skeleton.md`
+- [x] `002-daemon-transport-skeleton.md`
 - [ ] `003-console-tools-core.md`
 - [ ] `004-react-native-console-resilience.md`
 - [ ] `005-trace-recording-mvp.md`

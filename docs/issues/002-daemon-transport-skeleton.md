@@ -2,7 +2,7 @@
 
 ## Status
 
-- [ ] Open
+- [x] Done
 
 ## Blocked by
 
@@ -14,8 +14,8 @@ Add the unified target discovery and CDP transport/session abstractions behind t
 
 ## Acceptance criteria
 
-- [ ] Target discovery interfaces exist.
-- [ ] CDP transport/session interfaces exist.
-- [ ] Daemon can manage target selection state.
-- [ ] Chrome and React Native provider skeletons exist.
-- [ ] Tests cover daemon-side session orchestration basics.
+- [x] Target discovery interfaces exist.
+- [x] CDP transport/session interfaces exist.
+- [x] Daemon can manage target selection state.
+- [x] Chrome and React Native provider skeletons exist.
+- [x] Tests cover daemon-side session orchestration basics.

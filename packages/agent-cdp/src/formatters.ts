@@ -5,6 +5,7 @@ export function formatStatus(info: StatusInfo): string {
     `Daemon: ${info.daemonRunning ? "running" : "stopped"}`,
     `Uptime: ${Math.max(0, Math.round(info.uptime / 1000))}s`,
     `Providers: ${info.providerCount}`,
+    `Session: ${info.sessionState}`,
   ];
 
   if (info.selectedTarget) {
@@ -16,4 +17,16 @@ export function formatStatus(info: StatusInfo): string {
   }
 
   return lines.join("\n");
+}
+
+export function formatTargetList(targets: Array<NonNullable<StatusInfo["selectedTarget"]>>): string {
+  if (targets.length === 0) {
+    return "No targets found";
+  }
+
+  return targets
+    .map((target) => {
+      return `${target.id}\n  ${target.kind} ${target.title}\n  ${target.description}\n  ${target.webSocketDebuggerUrl}`;
+    })
+    .join("\n");
 }
