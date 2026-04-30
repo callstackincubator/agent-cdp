@@ -14,6 +14,10 @@ class FakeTransport implements CdpTransport {
     return Promise.resolve();
   }
 
+  isConnected(): boolean {
+    return this.connected;
+  }
+
   send(): Promise<unknown> {
     return Promise.resolve(undefined);
   }
@@ -60,5 +64,51 @@ describe("SessionManager", () => {
     await manager.clearTarget();
     expect(manager.getSelectedTarget()).toBeNull();
     expect(manager.getSessionState()).toBe("disconnected");
+  });
+
+  it("reconnects react native targets by logical device id", async () => {
+    class FakeReactNativeProvider implements TargetProvider {
+      readonly kind = "react-native" as const;
+      private attempt = 0;
+
+      async listTargets(): Promise<TargetDescriptor[]> {
+        this.attempt += 1;
+        return [
+          {
+            id: `react-native:test:page-${this.attempt}`,
+            rawId: `page-${this.attempt}`,
+            title: "React Native Experimental",
+            kind: "react-native",
+            description: "RN target",
+            appId: "com.example.app",
+            webSocketDebuggerUrl: `ws://example.test/inspector/debug?page=${this.attempt}`,
+            sourceUrl: "http://example.test",
+            reactNative: {
+              logicalDeviceId: "device-1",
+              capabilities: {
+                nativePageReloads: true,
+              },
+            },
+          },
+        ];
+      }
+
+      createTransport(): CdpTransport {
+        return new FakeTransport();
+      }
+    }
+
+    const manager = new SessionManager([new FakeReactNativeProvider()]);
+    await manager.selectTarget("react-native:test:page-1", { reactNativeUrl: "http://example.test" });
+    const session = manager.getSession();
+    if (!session) {
+      throw new Error("Expected session to exist");
+    }
+    await session.close();
+
+    await expect(manager.reconnectSelectedTarget()).resolves.toMatchObject({
+      rawId: "page-2",
+    });
+    expect(manager.getSessionState()).toBe("connected");
   });
 });

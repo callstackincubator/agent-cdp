@@ -37,6 +37,7 @@ export interface CdpEventMessage {
 export interface CdpTransport {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
+  isConnected(): boolean;
   send(method: string, params?: Record<string, unknown>): Promise<unknown>;
   onEvent(listener: (message: CdpEventMessage) => void): () => void;
 }

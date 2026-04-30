@@ -25,6 +25,7 @@ export class PersistentRuntimeSession implements RuntimeSession {
 export class SessionManager {
   private session: RuntimeSession | null = null;
   private sessionState: SessionState = "disconnected";
+  private selectedOptions: DiscoveryOptions | null = null;
 
   constructor(private readonly providers: TargetProvider[]) {}
 
@@ -64,6 +65,7 @@ export class SessionManager {
       await session.ensureConnected();
       this.session = session;
       this.sessionState = "connected";
+      this.selectedOptions = options;
       return target;
     } catch (error) {
       this.sessionState = "disconnected";
@@ -80,6 +82,7 @@ export class SessionManager {
 
     const session = this.session;
     this.session = null;
+    this.selectedOptions = null;
     await session.close();
   }
 
@@ -92,6 +95,65 @@ export class SessionManager {
   }
 
   getSessionState(): SessionState {
+    if (this.session && !this.session.transport.isConnected()) {
+      this.sessionState = "disconnected";
+    }
     return this.sessionState;
+  }
+
+  async reconnectSelectedTarget(): Promise<TargetDescriptor | null> {
+    const session = this.session;
+    if (!session || !this.selectedOptions) {
+      return null;
+    }
+
+    if (session.transport.isConnected()) {
+      this.sessionState = "connected";
+      return session.target;
+    }
+
+    const target = await this.findReconnectTarget(session.target, this.selectedOptions);
+    if (!target) {
+      this.sessionState = "disconnected";
+      return null;
+    }
+
+    const provider = this.providers.find((candidate) => candidate.kind === target.kind);
+    if (!provider) {
+      this.sessionState = "disconnected";
+      return null;
+    }
+
+    const nextSession = new PersistentRuntimeSession(target, provider.createTransport(target));
+    await nextSession.ensureConnected();
+    this.session = nextSession;
+    this.sessionState = "connected";
+    return target;
+  }
+
+  private async findReconnectTarget(
+    currentTarget: TargetDescriptor,
+    options: DiscoveryOptions,
+  ): Promise<TargetDescriptor | null> {
+    const targets = await this.listTargets(options);
+
+    if (currentTarget.kind !== "react-native") {
+      return targets.find((candidate) => candidate.id === currentTarget.id) || null;
+    }
+
+    const logicalDeviceId = currentTarget.reactNative?.logicalDeviceId;
+    if (!logicalDeviceId) {
+      return targets.find((candidate) => candidate.id === currentTarget.id) || null;
+    }
+
+    return (
+      targets.find((candidate) => {
+        return (
+          candidate.kind === "react-native" &&
+          candidate.reactNative?.logicalDeviceId === logicalDeviceId &&
+          candidate.appId === currentTarget.appId
+        );
+      }) || null
+    );
   }
 }

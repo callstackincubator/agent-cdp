@@ -14,6 +14,10 @@ class FakeConsoleTransport implements CdpTransport {
     return Promise.resolve();
   }
 
+  isConnected(): boolean {
+    return true;
+  }
+
   send(method: string): Promise<unknown> {
     this.sentMethods.push(method);
     return Promise.resolve(undefined);

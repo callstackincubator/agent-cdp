@@ -54,6 +54,10 @@ export class WebSocketCdpTransport implements CdpTransport {
     });
   }
 
+  isConnected(): boolean {
+    return this.socket?.readyState === WebSocket.OPEN;
+  }
+
   send(method: string, params?: Record<string, unknown>): Promise<unknown> {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       return Promise.reject(new Error(`Transport is not connected for ${this.target.id}`));

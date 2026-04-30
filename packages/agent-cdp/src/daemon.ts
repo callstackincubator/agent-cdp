@@ -136,10 +136,12 @@ class Daemon {
     }
 
     if (command.type === "list-console-messages") {
+      await this.ensureConsoleSessionReady();
       return { ok: true, data: this.consoleCollector.list(command.limit) };
     }
 
     if (command.type === "get-console-message") {
+      await this.ensureConsoleSessionReady();
       const message = this.consoleCollector.get(command.id);
       if (!message) {
         return { ok: false, error: `Console message ${command.id} not found` };
@@ -156,6 +158,20 @@ class Daemon {
     };
 
     return { ok: true, data: status };
+  }
+
+  private async ensureConsoleSessionReady(): Promise<void> {
+    const target = await this.sessionManager.reconnectSelectedTarget();
+    if (!target || target.kind !== "react-native") {
+      return;
+    }
+
+    const session = this.sessionManager.getSession();
+    if (!session) {
+      return;
+    }
+
+    await this.consoleCollector.attach(session);
   }
 }
 
