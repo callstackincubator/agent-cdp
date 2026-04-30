@@ -1,6 +1,6 @@
 import { ensureDaemon, readDaemonInfo, sendCommand, stopDaemon } from "./daemon-client.js";
-import { formatConsoleList, formatConsoleMessage, formatStatus, formatTargetList } from "./formatters.js";
-import type { ConsoleMessage, DiscoveryOptions, StatusInfo, TargetDescriptor } from "./types.js";
+import { formatConsoleList, formatConsoleMessage, formatStatus, formatTargetList, formatTraceSummary } from "./formatters.js";
+import type { ConsoleMessage, DiscoveryOptions, StatusInfo, TargetDescriptor, TraceRecordingSummary } from "./types.js";
 
 export function usage(): string {
   return `Usage: agent-cdp <command>
@@ -17,7 +17,11 @@ Targets:
 
 Console:
   console list [--limit N]
-  console get <id>`;
+  console get <id>
+
+Trace:
+  trace start
+  trace stop [--file PATH]`;
 }
 
 export function parseArgs(argv: string[]): {
@@ -62,6 +66,10 @@ function readConsoleMessages(data: unknown): ConsoleMessage[] {
 
 function readConsoleMessage(data: unknown): ConsoleMessage {
   return data as ConsoleMessage;
+}
+
+function readTraceSummary(data: unknown): TraceRecordingSummary {
+  return data as TraceRecordingSummary;
 }
 
 function discoveryOptionsFromFlags(flags: Record<string, string | boolean>): DiscoveryOptions {
@@ -174,6 +182,27 @@ async function main(): Promise<void> {
       throw new Error(response.error || "Failed to get console message");
     }
     console.log(formatConsoleMessage(readConsoleMessage(response.data)));
+    return;
+  }
+
+  if (cmd === "trace" && command[1] === "start") {
+    await ensureDaemon();
+    const response = await sendCommand({ type: "start-trace" });
+    if (!response.ok) {
+      throw new Error(response.error || "Failed to start trace");
+    }
+    console.log("Trace started");
+    return;
+  }
+
+  if (cmd === "trace" && command[1] === "stop") {
+    await ensureDaemon();
+    const filePath = typeof flags.file === "string" ? flags.file : undefined;
+    const response = await sendCommand({ type: "stop-trace", filePath });
+    if (!response.ok) {
+      throw new Error(response.error || "Failed to stop trace");
+    }
+    console.log(formatTraceSummary(readTraceSummary(response.data)));
     return;
   }
 

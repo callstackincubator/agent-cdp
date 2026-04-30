@@ -1,4 +1,4 @@
-import type { ConsoleMessage, StatusInfo } from "./types.js";
+import type { ConsoleMessage, StatusInfo, TraceRecordingSummary } from "./types.js";
 
 export function formatStatus(info: StatusInfo): string {
   const lines = [
@@ -6,6 +6,7 @@ export function formatStatus(info: StatusInfo): string {
     `Uptime: ${Math.max(0, Math.round(info.uptime / 1000))}s`,
     `Providers: ${info.providerCount}`,
     `Session: ${info.sessionState}`,
+    `Trace: ${info.tracingActive ? "active" : "idle"}`,
   ];
 
   if (info.selectedTarget) {
@@ -57,5 +58,13 @@ export function formatConsoleMessage(message: ConsoleMessage): string {
     lines.push(message.stackTrace);
   }
 
+  return lines.join("\n");
+}
+
+export function formatTraceSummary(summary: TraceRecordingSummary): string {
+  const lines = [`Trace events: ${summary.eventCount}`];
+  if (summary.filePath) {
+    lines.push(`Saved to: ${summary.filePath}`);
+  }
   return lines.join("\n");
 }

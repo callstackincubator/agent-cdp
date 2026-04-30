@@ -5,6 +5,7 @@ import path from "node:path";
 import { ConsoleCollector } from "./console.js";
 import { createTargetProviders } from "./providers.js";
 import { SessionManager } from "./session-manager.js";
+import { TraceRecorder } from "./trace.js";
 import type { DaemonInfo, IpcCommand, IpcResponse, StatusInfo } from "./types.js";
 
 const STATE_DIR = path.join(process.env.HOME || process.env.USERPROFILE || "/tmp", ".agent-cdp");
@@ -22,6 +23,7 @@ class Daemon {
   private readonly consoleCollector = new ConsoleCollector();
   private readonly providers = createTargetProviders();
   private readonly sessionManager = new SessionManager(this.providers);
+  private readonly traceRecorder = new TraceRecorder();
   private ipcServer: net.Server | null = null;
 
   async start(): Promise<void> {
@@ -149,12 +151,23 @@ class Daemon {
       return { ok: true, data: message };
     }
 
+    if (command.type === "start-trace") {
+      const session = await this.requireSession();
+      await this.traceRecorder.start(session);
+      return { ok: true, data: "Trace started" };
+    }
+
+    if (command.type === "stop-trace") {
+      return { ok: true, data: await this.traceRecorder.stop(command.filePath) };
+    }
+
     const status: StatusInfo = {
       daemonRunning: true,
       uptime: Date.now() - this.startedAt,
       selectedTarget: this.sessionManager.getSelectedTarget(),
       providerCount: this.providers.length,
       sessionState: this.sessionManager.getSessionState(),
+      tracingActive: this.traceRecorder.isActive(),
     };
 
     return { ok: true, data: status };
@@ -172,6 +185,15 @@ class Daemon {
     }
 
     await this.consoleCollector.attach(session);
+  }
+
+  private async requireSession() {
+    await this.sessionManager.reconnectSelectedTarget();
+    const session = this.sessionManager.getSession();
+    if (!session) {
+      throw new Error("No target selected");
+    }
+    return session;
   }
 }
 

@@ -9,6 +9,7 @@ describe("formatStatus", () => {
         providerCount: 2,
         sessionState: "disconnected",
         selectedTarget: null,
+        tracingActive: false,
       }),
     ).toContain("Providers: 2");
   });

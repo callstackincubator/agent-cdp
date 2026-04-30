@@ -60,6 +60,11 @@ export interface ConsoleMessage {
   stackTrace?: string;
 }
 
+export interface TraceRecordingSummary {
+  eventCount: number;
+  filePath?: string;
+}
+
 export type SessionState = "disconnected" | "connecting" | "connected";
 
 export interface DaemonInfo {
@@ -75,6 +80,7 @@ export interface StatusInfo {
   selectedTarget: TargetDescriptor | null;
   providerCount: number;
   sessionState: SessionState;
+  tracingActive: boolean;
 }
 
 export type IpcCommand =
@@ -84,7 +90,9 @@ export type IpcCommand =
   | { type: "select-target"; targetId: string; options: DiscoveryOptions }
   | { type: "clear-target" }
   | { type: "list-console-messages"; limit?: number }
-  | { type: "get-console-message"; id: number };
+  | { type: "get-console-message"; id: number }
+  | { type: "start-trace" }
+  | { type: "stop-trace"; filePath?: string };
 
 export interface IpcResponse {
   ok: boolean;
