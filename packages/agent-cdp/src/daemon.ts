@@ -19,6 +19,13 @@ function getDaemonInfoPath(): string {
   return path.join(STATE_DIR, "daemon.json");
 }
 
+export function shouldReattachConsoleCollector(
+  wasConnected: boolean,
+  target: { kind: "chrome" | "react-native" } | null,
+): boolean {
+  return !wasConnected && target?.kind === "react-native";
+}
+
 class Daemon {
   private readonly startedAt = Date.now();
   private readonly consoleCollector = new ConsoleCollector();
@@ -188,8 +195,10 @@ class Daemon {
   }
 
   private async ensureConsoleSessionReady(): Promise<void> {
+    const currentSession = this.sessionManager.getSession();
+    const wasConnected = currentSession?.transport.isConnected() || false;
     const target = await this.sessionManager.reconnectSelectedTarget();
-    if (!target || target.kind !== "react-native") {
+    if (!shouldReattachConsoleCollector(wasConnected, target)) {
       return;
     }
 
