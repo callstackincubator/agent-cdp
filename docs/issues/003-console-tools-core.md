@@ -2,7 +2,7 @@
 
 ## Status
 
-- [ ] Open
+- [x] Done
 
 ## Blocked by
 
@@ -14,8 +14,8 @@ Deliver the first user-facing CDP tools by implementing console collection and i
 
 ## Acceptance criteria
 
-- [ ] CLI exposes console commands.
-- [ ] Daemon subscribes to runtime/console events.
-- [ ] Stable console message IDs exist.
-- [ ] Compact formatter output is implemented.
-- [ ] Tests cover message collection and retrieval.
+- [x] CLI exposes console commands.
+- [x] Daemon subscribes to runtime/console events.
+- [x] Stable console message IDs exist.
+- [x] Compact formatter output is implemented.
+- [x] Tests cover message collection and retrieval.

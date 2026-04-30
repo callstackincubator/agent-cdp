@@ -87,6 +87,10 @@ export class SessionManager {
     return this.session?.target || null;
   }
 
+  getSession(): RuntimeSession | null {
+    return this.session;
+  }
+
   getSessionState(): SessionState {
     return this.sessionState;
   }

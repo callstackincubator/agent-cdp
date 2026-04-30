@@ -1,6 +1,6 @@
 import { ensureDaemon, readDaemonInfo, sendCommand, stopDaemon } from "./daemon-client.js";
-import { formatStatus, formatTargetList } from "./formatters.js";
-import type { DiscoveryOptions, StatusInfo, TargetDescriptor } from "./types.js";
+import { formatConsoleList, formatConsoleMessage, formatStatus, formatTargetList } from "./formatters.js";
+import type { ConsoleMessage, DiscoveryOptions, StatusInfo, TargetDescriptor } from "./types.js";
 
 export function usage(): string {
   return `Usage: agent-cdp <command>
@@ -13,7 +13,11 @@ Daemon:
 Targets:
   target list [--chrome-url URL] [--react-native-url URL]
   target select <id> [--chrome-url URL] [--react-native-url URL]
-  target clear`;
+  target clear
+
+Console:
+  console list [--limit N]
+  console get <id>`;
 }
 
 export function parseArgs(argv: string[]): {
@@ -50,6 +54,14 @@ function readStatusInfo(data: unknown): StatusInfo {
 
 function readTargets(data: unknown): TargetDescriptor[] {
   return data as TargetDescriptor[];
+}
+
+function readConsoleMessages(data: unknown): ConsoleMessage[] {
+  return data as ConsoleMessage[];
+}
+
+function readConsoleMessage(data: unknown): ConsoleMessage {
+  return data as ConsoleMessage;
 }
 
 function discoveryOptionsFromFlags(flags: Record<string, string | boolean>): DiscoveryOptions {
@@ -136,6 +148,32 @@ async function main(): Promise<void> {
       throw new Error(response.error || "Failed to clear target");
     }
     console.log("Target cleared");
+    return;
+  }
+
+  if (cmd === "console" && command[1] === "list") {
+    await ensureDaemon();
+    const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
+    const response = await sendCommand({ type: "list-console-messages", limit });
+    if (!response.ok) {
+      throw new Error(response.error || "Failed to list console messages");
+    }
+    console.log(formatConsoleList(readConsoleMessages(response.data)));
+    return;
+  }
+
+  if (cmd === "console" && command[1] === "get") {
+    const rawId = command[2];
+    const id = rawId ? Number.parseInt(rawId, 10) : Number.NaN;
+    if (Number.isNaN(id)) {
+      throw new Error("Usage: agent-cdp console get <id>");
+    }
+    await ensureDaemon();
+    const response = await sendCommand({ type: "get-console-message", id });
+    if (!response.ok) {
+      throw new Error(response.error || "Failed to get console message");
+    }
+    console.log(formatConsoleMessage(readConsoleMessage(response.data)));
     return;
   }
 

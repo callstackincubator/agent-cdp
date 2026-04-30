@@ -2,6 +2,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 
+import { ConsoleCollector } from "./console.js";
 import { createTargetProviders } from "./providers.js";
 import { SessionManager } from "./session-manager.js";
 import type { DaemonInfo, IpcCommand, IpcResponse, StatusInfo } from "./types.js";
@@ -18,6 +19,7 @@ function getDaemonInfoPath(): string {
 
 class Daemon {
   private readonly startedAt = Date.now();
+  private readonly consoleCollector = new ConsoleCollector();
   private readonly providers = createTargetProviders();
   private readonly sessionManager = new SessionManager(this.providers);
   private ipcServer: net.Server | null = null;
@@ -50,6 +52,7 @@ class Daemon {
 
     const shutdown = () => {
       void this.sessionManager.clearTarget().finally(() => {
+        this.consoleCollector.detach();
         this.stop();
         process.exit(0);
       });
@@ -115,15 +118,33 @@ class Daemon {
     }
 
     if (command.type === "select-target") {
+      const target = await this.sessionManager.selectTarget(command.targetId, command.options);
+      const session = this.sessionManager.getSession();
+      if (session) {
+        await this.consoleCollector.attach(session);
+      }
       return {
         ok: true,
-        data: await this.sessionManager.selectTarget(command.targetId, command.options),
+        data: target,
       };
     }
 
     if (command.type === "clear-target") {
+      this.consoleCollector.detach();
       await this.sessionManager.clearTarget();
       return { ok: true, data: "Target cleared" };
+    }
+
+    if (command.type === "list-console-messages") {
+      return { ok: true, data: this.consoleCollector.list(command.limit) };
+    }
+
+    if (command.type === "get-console-message") {
+      const message = this.consoleCollector.get(command.id);
+      if (!message) {
+        return { ok: false, error: `Console message ${command.id} not found` };
+      }
+      return { ok: true, data: message };
     }
 
     const status: StatusInfo = {

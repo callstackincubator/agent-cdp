@@ -1,4 +1,4 @@
-import type { StatusInfo } from "./types.js";
+import type { ConsoleMessage, StatusInfo } from "./types.js";
 
 export function formatStatus(info: StatusInfo): string {
   const lines = [
@@ -29,4 +29,33 @@ export function formatTargetList(targets: Array<NonNullable<StatusInfo["selected
       return `${target.id}\n  ${target.kind} ${target.title}\n  ${target.description}\n  ${target.webSocketDebuggerUrl}`;
     })
     .join("\n");
+}
+
+export function formatConsoleList(messages: ConsoleMessage[]): string {
+  if (messages.length === 0) {
+    return "No console messages";
+  }
+
+  return messages
+    .map((message) => {
+      return `#${message.id} [${message.source}:${message.level}] ${message.text}`;
+    })
+    .join("\n");
+}
+
+export function formatConsoleMessage(message: ConsoleMessage): string {
+  const lines = [`#${message.id}`, `Source: ${message.source}`, `Level: ${message.level}`, `Type: ${message.type}`];
+
+  if (message.url) {
+    lines.push(`URL: ${message.url}`);
+  }
+
+  lines.push(`Text: ${message.text}`);
+
+  if (message.stackTrace) {
+    lines.push("Stack:");
+    lines.push(message.stackTrace);
+  }
+
+  return lines.join("\n");
 }

@@ -48,6 +48,17 @@ export interface RuntimeSession {
   close(): Promise<void>;
 }
 
+export interface ConsoleMessage {
+  id: number;
+  source: "runtime" | "console" | "log";
+  type: string;
+  level: string;
+  text: string;
+  timestamp: number;
+  url?: string;
+  stackTrace?: string;
+}
+
 export type SessionState = "disconnected" | "connecting" | "connected";
 
 export interface DaemonInfo {
@@ -70,7 +81,9 @@ export type IpcCommand =
   | { type: "status" }
   | { type: "list-targets"; options: DiscoveryOptions }
   | { type: "select-target"; targetId: string; options: DiscoveryOptions }
-  | { type: "clear-target" };
+  | { type: "clear-target" }
+  | { type: "list-console-messages"; limit?: number }
+  | { type: "get-console-message"; id: number };
 
 export interface IpcResponse {
   ok: boolean;
