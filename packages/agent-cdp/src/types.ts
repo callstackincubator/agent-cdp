@@ -65,6 +65,11 @@ export interface TraceRecordingSummary {
   filePath?: string;
 }
 
+export interface MemorySnapshotSummary {
+  chunkCount: number;
+  filePath: string;
+}
+
 export type SessionState = "disconnected" | "connecting" | "connected";
 
 export interface DaemonInfo {
@@ -92,7 +97,8 @@ export type IpcCommand =
   | { type: "list-console-messages"; limit?: number }
   | { type: "get-console-message"; id: number }
   | { type: "start-trace" }
-  | { type: "stop-trace"; filePath?: string };
+  | { type: "stop-trace"; filePath?: string }
+  | { type: "capture-memory"; filePath: string };
 
 export interface IpcResponse {
   ok: boolean;

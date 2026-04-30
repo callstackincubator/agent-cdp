@@ -1,4 +1,4 @@
-import type { ConsoleMessage, StatusInfo, TraceRecordingSummary } from "./types.js";
+import type { ConsoleMessage, MemorySnapshotSummary, StatusInfo, TraceRecordingSummary } from "./types.js";
 
 export function formatStatus(info: StatusInfo): string {
   const lines = [
@@ -67,4 +67,8 @@ export function formatTraceSummary(summary: TraceRecordingSummary): string {
     lines.push(`Saved to: ${summary.filePath}`);
   }
   return lines.join("\n");
+}
+
+export function formatMemorySummary(summary: MemorySnapshotSummary): string {
+  return `Heap snapshot chunks: ${summary.chunkCount}\nSaved to: ${summary.filePath}`;
 }

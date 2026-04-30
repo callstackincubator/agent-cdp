@@ -1,6 +1,20 @@
 import { ensureDaemon, readDaemonInfo, sendCommand, stopDaemon } from "./daemon-client.js";
-import { formatConsoleList, formatConsoleMessage, formatStatus, formatTargetList, formatTraceSummary } from "./formatters.js";
-import type { ConsoleMessage, DiscoveryOptions, StatusInfo, TargetDescriptor, TraceRecordingSummary } from "./types.js";
+import {
+  formatConsoleList,
+  formatConsoleMessage,
+  formatMemorySummary,
+  formatStatus,
+  formatTargetList,
+  formatTraceSummary,
+} from "./formatters.js";
+import type {
+  ConsoleMessage,
+  DiscoveryOptions,
+  MemorySnapshotSummary,
+  StatusInfo,
+  TargetDescriptor,
+  TraceRecordingSummary,
+} from "./types.js";
 
 export function usage(): string {
   return `Usage: agent-cdp <command>
@@ -21,7 +35,10 @@ Console:
 
 Trace:
   trace start
-  trace stop [--file PATH]`;
+  trace stop [--file PATH]
+
+Memory:
+  memory capture --file PATH`;
 }
 
 export function parseArgs(argv: string[]): {
@@ -70,6 +87,10 @@ function readConsoleMessage(data: unknown): ConsoleMessage {
 
 function readTraceSummary(data: unknown): TraceRecordingSummary {
   return data as TraceRecordingSummary;
+}
+
+function readMemorySummary(data: unknown): MemorySnapshotSummary {
+  return data as MemorySnapshotSummary;
 }
 
 function discoveryOptionsFromFlags(flags: Record<string, string | boolean>): DiscoveryOptions {
@@ -203,6 +224,20 @@ async function main(): Promise<void> {
       throw new Error(response.error || "Failed to stop trace");
     }
     console.log(formatTraceSummary(readTraceSummary(response.data)));
+    return;
+  }
+
+  if (cmd === "memory" && command[1] === "capture") {
+    const filePath = typeof flags.file === "string" ? flags.file : undefined;
+    if (!filePath) {
+      throw new Error("Usage: agent-cdp memory capture --file PATH");
+    }
+    await ensureDaemon();
+    const response = await sendCommand({ type: "capture-memory", filePath });
+    if (!response.ok) {
+      throw new Error(response.error || "Failed to capture heap snapshot");
+    }
+    console.log(formatMemorySummary(readMemorySummary(response.data)));
     return;
   }
 

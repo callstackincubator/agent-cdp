@@ -1,5 +1,6 @@
 export * from "./console.js";
 export * from "./discovery.js";
+export * from "./memory.js";
 export * from "./types.js";
 export * from "./formatters.js";
 export * from "./providers.js";

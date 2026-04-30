@@ -3,6 +3,7 @@ import net from "node:net";
 import path from "node:path";
 
 import { ConsoleCollector } from "./console.js";
+import { MemorySnapshotter } from "./memory.js";
 import { createTargetProviders } from "./providers.js";
 import { SessionManager } from "./session-manager.js";
 import { TraceRecorder } from "./trace.js";
@@ -21,6 +22,7 @@ function getDaemonInfoPath(): string {
 class Daemon {
   private readonly startedAt = Date.now();
   private readonly consoleCollector = new ConsoleCollector();
+  private readonly memorySnapshotter = new MemorySnapshotter();
   private readonly providers = createTargetProviders();
   private readonly sessionManager = new SessionManager(this.providers);
   private readonly traceRecorder = new TraceRecorder();
@@ -159,6 +161,11 @@ class Daemon {
 
     if (command.type === "stop-trace") {
       return { ok: true, data: await this.traceRecorder.stop(command.filePath) };
+    }
+
+    if (command.type === "capture-memory") {
+      const session = await this.requireSession();
+      return { ok: true, data: await this.memorySnapshotter.capture(session, command.filePath) };
     }
 
     const status: StatusInfo = {

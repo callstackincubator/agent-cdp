@@ -9,6 +9,6 @@ These files track the MVP slices for `agent-cdp`.
 - [x] `005-trace-recording-mvp.md`
 - [ ] `006-trace-reporting.md`
 - [ ] `007-react-native-trace-hardening.md`
-- [ ] `008-memory-snapshot-capture.md`
+- [x] `008-memory-snapshot-capture.md`
 - [ ] `009-memory-snapshot-analysis.md`
 - [ ] `010-docs-and-coverage.md`

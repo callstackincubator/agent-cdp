@@ -2,7 +2,7 @@
 
 ## Status
 
-- [ ] Open
+- [x] Done
 
 ## Blocked by
 
@@ -14,6 +14,6 @@ Add heap snapshot capture with clear target capability handling.
 
 ## Acceptance criteria
 
-- [ ] CLI exposes heap snapshot capture.
-- [ ] Snapshots can be written to disk.
-- [ ] Unsupported targets surface explicit errors.
+- [x] CLI exposes heap snapshot capture.
+- [x] Snapshots can be written to disk.
+- [x] Unsupported targets surface explicit errors.
