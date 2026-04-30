@@ -3,3 +3,5 @@ dist/
 coverage/
 *.tsbuildinfo
 .DS_Store
+smoke-trace.json
+smoke.heapsnapshot
