@@ -26,6 +26,14 @@ export function shouldReattachConsoleCollector(
   return !wasConnected && target?.kind === "react-native";
 }
 
+export function getConnectionErrorMessage(selectedTarget: { id: string } | null): string {
+  if (!selectedTarget) {
+    return "No target selected. Use `target select` first.";
+  }
+
+  return `Target ${selectedTarget.id} is not connected. Reconnect the app and try again.`;
+}
+
 class Daemon {
   private readonly startedAt = Date.now();
   private readonly consoleCollector = new ConsoleCollector();
@@ -197,26 +205,27 @@ class Daemon {
   private async ensureConsoleSessionReady(): Promise<void> {
     const currentSession = this.sessionManager.getSession();
     const wasConnected = currentSession?.transport.isConnected() || false;
-    const target = await this.sessionManager.reconnectSelectedTarget();
+    const session = await this.requireConnectedSession();
+    const target = session.target;
     if (!shouldReattachConsoleCollector(wasConnected, target)) {
-      return;
-    }
-
-    const session = this.sessionManager.getSession();
-    if (!session) {
       return;
     }
 
     await this.consoleCollector.attach(session);
   }
 
-  private async requireSession() {
+  private async requireConnectedSession() {
+    const selectedTarget = this.sessionManager.getSelectedTarget();
     await this.sessionManager.reconnectSelectedTarget();
     const session = this.sessionManager.getSession();
-    if (!session) {
-      throw new Error("No target selected");
+    if (!session || !session.transport.isConnected()) {
+      throw new Error(getConnectionErrorMessage(selectedTarget));
     }
     return session;
+  }
+
+  private requireSession() {
+    return this.requireConnectedSession();
   }
 }
 
