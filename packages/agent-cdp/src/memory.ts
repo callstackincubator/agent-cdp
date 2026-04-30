@@ -29,7 +29,6 @@ export class MemorySnapshotter {
     });
 
     try {
-      await session.transport.send("HeapProfiler.enable");
       await session.transport.send("HeapProfiler.takeHeapSnapshot", { reportProgress: true });
       await activeSnapshot.completion;
     } finally {

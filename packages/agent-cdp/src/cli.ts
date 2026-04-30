@@ -50,6 +50,10 @@ export function parseArgs(argv: string[]): {
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
+    if (arg === "--") {
+      continue;
+    }
+
     if (!arg.startsWith("--")) {
       command.push(arg);
       continue;

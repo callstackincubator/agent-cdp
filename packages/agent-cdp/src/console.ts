@@ -83,7 +83,7 @@ export class ConsoleCollector {
       source: "runtime",
       type: message.type || "log",
       level: message.type || "log",
-      text: (message.args || []).map((arg) => stringifyRemoteArg(arg)).join(" ").trim(),
+      text: stripAnsi((message.args || []).map((arg) => stringifyRemoteArg(arg)).join(" ").trim()),
       timestamp: typeof message.timestamp === "number" ? message.timestamp : Date.now(),
       url: firstFrame?.url,
       stackTrace: formatStackTrace(stackFrames),
@@ -100,7 +100,7 @@ export class ConsoleCollector {
       source,
       type: message.source || source,
       level: message.level || source,
-      text: message.text || "",
+      text: stripAnsi(message.text || ""),
       timestamp: Date.now(),
       url: location || message.url,
     };
@@ -135,4 +135,8 @@ function formatStackTrace(
       return `${functionName} (${url}:${line}:${column})`;
     })
     .join("\n");
+}
+
+function stripAnsi(text: string): string {
+  return text.replace(new RegExp(String.raw`\u001B\[[0-9;]*m`, "g"), "");
 }

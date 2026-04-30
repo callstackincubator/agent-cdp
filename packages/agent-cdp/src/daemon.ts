@@ -113,71 +113,78 @@ class Daemon {
   }
 
   private async handleCommand(command: IpcCommand): Promise<IpcResponse> {
-    if (command.type === "ping") {
-      return { ok: true, data: "pong" };
-    }
-
-    if (command.type === "list-targets") {
-      return { ok: true, data: await this.sessionManager.listTargets(command.options) };
-    }
-
-    if (command.type === "select-target") {
-      const target = await this.sessionManager.selectTarget(command.targetId, command.options);
-      const session = this.sessionManager.getSession();
-      if (session) {
-        await this.consoleCollector.attach(session);
+    try {
+      if (command.type === "ping") {
+        return { ok: true, data: "pong" };
       }
+
+      if (command.type === "list-targets") {
+        return { ok: true, data: await this.sessionManager.listTargets(command.options) };
+      }
+
+      if (command.type === "select-target") {
+        const target = await this.sessionManager.selectTarget(command.targetId, command.options);
+        const session = this.sessionManager.getSession();
+        if (session) {
+          await this.consoleCollector.attach(session);
+        }
+        return {
+          ok: true,
+          data: target,
+        };
+      }
+
+      if (command.type === "clear-target") {
+        this.consoleCollector.detach();
+        await this.sessionManager.clearTarget();
+        return { ok: true, data: "Target cleared" };
+      }
+
+      if (command.type === "list-console-messages") {
+        await this.ensureConsoleSessionReady();
+        return { ok: true, data: this.consoleCollector.list(command.limit) };
+      }
+
+      if (command.type === "get-console-message") {
+        await this.ensureConsoleSessionReady();
+        const message = this.consoleCollector.get(command.id);
+        if (!message) {
+          return { ok: false, error: `Console message ${command.id} not found` };
+        }
+        return { ok: true, data: message };
+      }
+
+      if (command.type === "start-trace") {
+        const session = await this.requireSession();
+        await this.traceRecorder.start(session);
+        return { ok: true, data: "Trace started" };
+      }
+
+      if (command.type === "stop-trace") {
+        return { ok: true, data: await this.traceRecorder.stop(command.filePath) };
+      }
+
+      if (command.type === "capture-memory") {
+        const session = await this.requireSession();
+        return { ok: true, data: await this.memorySnapshotter.capture(session, command.filePath) };
+      }
+
+      const status: StatusInfo = {
+        daemonRunning: true,
+        uptime: Date.now() - this.startedAt,
+        selectedTarget: this.sessionManager.getSelectedTarget(),
+        providerCount: this.providers.length,
+        sessionState: this.sessionManager.getSessionState(),
+        tracingActive: this.traceRecorder.isActive(),
+      };
+
+      return { ok: true, data: status };
+    } catch (error) {
       return {
-        ok: true,
-        data: target,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
       };
     }
-
-    if (command.type === "clear-target") {
-      this.consoleCollector.detach();
-      await this.sessionManager.clearTarget();
-      return { ok: true, data: "Target cleared" };
-    }
-
-    if (command.type === "list-console-messages") {
-      await this.ensureConsoleSessionReady();
-      return { ok: true, data: this.consoleCollector.list(command.limit) };
-    }
-
-    if (command.type === "get-console-message") {
-      await this.ensureConsoleSessionReady();
-      const message = this.consoleCollector.get(command.id);
-      if (!message) {
-        return { ok: false, error: `Console message ${command.id} not found` };
-      }
-      return { ok: true, data: message };
-    }
-
-    if (command.type === "start-trace") {
-      const session = await this.requireSession();
-      await this.traceRecorder.start(session);
-      return { ok: true, data: "Trace started" };
-    }
-
-    if (command.type === "stop-trace") {
-      return { ok: true, data: await this.traceRecorder.stop(command.filePath) };
-    }
-
-    if (command.type === "capture-memory") {
-      const session = await this.requireSession();
-      return { ok: true, data: await this.memorySnapshotter.capture(session, command.filePath) };
-    }
-
-    const status: StatusInfo = {
-      daemonRunning: true,
-      uptime: Date.now() - this.startedAt,
-      selectedTarget: this.sessionManager.getSelectedTarget(),
-      providerCount: this.providers.length,
-      sessionState: this.sessionManager.getSessionState(),
-      tracingActive: this.traceRecorder.isActive(),
-    };
-
-    return { ok: true, data: status };
   }
 
   private async ensureConsoleSessionReady(): Promise<void> {

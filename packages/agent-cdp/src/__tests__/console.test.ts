@@ -82,4 +82,24 @@ describe("ConsoleCollector", () => {
     expect(formatConsoleList([message])).toContain("boom");
     expect(formatConsoleMessage(message)).toContain("render (app.js:12:4)");
   });
+
+  it("strips ansi escape sequences from console text", async () => {
+    const transport = new FakeConsoleTransport();
+    const collector = new ConsoleCollector();
+
+    await collector.attach(createSession(transport));
+    transport.emit({
+      method: "Log.entryAdded",
+      params: {
+        entry: {
+          text: "\u001b[48;2;253;247;231m\u001b[30mDebugger integration",
+          level: "info",
+        },
+      },
+    });
+
+    const [message] = collector.list();
+    expect(message.text).toBe("Debugger integration");
+    expect(formatConsoleList([message])).not.toContain("\u001b[");
+  });
 });
