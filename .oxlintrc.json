@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
+  "rules": {
+    "max-depth": "off",
+    "max-lines-per-function": "off",
+    "max-nested-callbacks": "off",
+    "max-classes-per-file": "off",
+    "require-await": "off"
+  },
+  "ignorePatterns": ["references/**", "dist/**", "node_modules/**"]
+}

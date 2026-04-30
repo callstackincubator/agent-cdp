@@ -1,0 +1,26 @@
+{
+  "name": "agent-cdp",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Lightweight CDP CLI for Chrome and React Native",
+  "license": "MIT",
+  "packageManager": "pnpm@9.15.3+sha512.1f79bc245a66eb0b07c5d4d83131240774642caaa86ef7d0434ab47c0d16f66b04e21e0c086eb61e62c77efc4d7f7ec071afad3796af64892fae66509173893a",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "pnpm --filter agent-cdp build",
+    "lint": "pnpm --filter agent-cdp lint",
+    "format": "pnpm --filter agent-cdp format",
+    "format:check": "pnpm --filter agent-cdp format:check",
+    "prepare": "simple-git-hooks",
+    "test": "pnpm --filter agent-cdp test",
+    "typecheck": "pnpm --filter agent-cdp typecheck"
+  },
+  "devDependencies": {
+    "simple-git-hooks": "^2.11.1"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm run format && pnpm run lint && pnpm run typecheck"
+  }
+}

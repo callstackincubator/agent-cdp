@@ -1,0 +1,33 @@
+{
+  "name": "agent-cdp",
+  "version": "0.0.0",
+  "description": "CLI for agent-friendly CDP access to Chrome and React Native",
+  "type": "module",
+  "bin": {
+    "agent-cdp": "./dist/cli.js"
+  },
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "format": "oxfmt --write \"src/**/*.ts\" package.json tsconfig.json tsup.config.ts vitest.config.ts",
+    "format:check": "oxfmt --check \"src/**/*.ts\" package.json tsconfig.json tsup.config.ts vitest.config.ts",
+    "lint": "oxlint .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "oxfmt": "^0.17.0",
+    "oxlint": "^0.17.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.4"
+  }
+}
