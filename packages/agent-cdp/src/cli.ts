@@ -16,6 +16,7 @@ import {
   formatJsProfileSummary,
   formatJsSessionList,
   formatJsSlice,
+  formatJsSourceMaps,
   formatJsStacks,
 } from "./js-profiler/formatters.js";
 import type {
@@ -63,7 +64,8 @@ JS Profiler:
   js-profile stacks [--session ID] [--limit N] [--offset N] [--min-ms N] [--max-depth N]
   js-profile slice --start MS --end MS [--session ID] [--limit N]
   js-profile diff --base SESSION_ID --compare SESSION_ID [--limit N] [--min-delta-pct N]
-  js-profile export [--session ID]`;
+  js-profile export [--session ID]
+  js-profile source-maps [--session ID]`;
 }
 
 export function parseArgs(argv: string[]): {
@@ -403,6 +405,15 @@ async function main(): Promise<void> {
     const response = await sendCommand({ type: "js-profile-export", sessionId });
     if (!response.ok) throw new Error(response.error || "Failed to export JS profile");
     console.log(JSON.stringify(response.data, null, 2));
+    return;
+  }
+
+  if (cmd === "js-profile" && command[1] === "source-maps") {
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-profile-source-maps", sessionId });
+    if (!response.ok) throw new Error(response.error || "Failed to get source map info");
+    console.log(formatJsSourceMaps(response.data as Parameters<typeof formatJsSourceMaps>[0]));
     return;
   }
 

@@ -11,11 +11,14 @@ import {
   queryModules,
   querySessions,
   querySlice,
+  querySourceMaps,
   queryStacks,
   querySummary,
 } from "./query.js";
+import { resolveSourceMaps } from "./source-map.js";
 import { JsProfileStore } from "./store.js";
 import type {
+  CdpProfile,
   JsDiffResult,
   JsHotspotDetailResult,
   JsHotspotsResult,
@@ -24,6 +27,7 @@ import type {
   JsProfileSummary,
   JsSessionListEntry,
   JsSliceResult,
+  JsSourceMapsResult,
   JsStacksResult,
 } from "./types.js";
 
@@ -38,13 +42,18 @@ export class JsProfiler {
   async stop(session: RuntimeSession): Promise<string> {
     const result = await this.capture.stop(session);
     const sessionId = this.store.generateId();
-    const normalized = normalizeProfile(result.rawProfile, {
+
+    const rawProfile = result.rawProfile as CdpProfile;
+    const sym = await resolveSourceMaps(rawProfile);
+
+    const normalized = normalizeProfile(rawProfile, {
       sessionId,
       name: result.name,
       startedAt: result.startedAt,
       stoppedAt: result.stoppedAt,
       samplingIntervalUs: result.samplingIntervalUs,
-    });
+    }, sym);
+
     this.store.add(normalized);
     return sessionId;
   }
@@ -103,6 +112,10 @@ export class JsProfiler {
     return this.resolveSession(sessionId).rawProfile;
   }
 
+  getSourceMaps(sessionId?: string): JsSourceMapsResult {
+    return querySourceMaps(this.resolveSession(sessionId));
+  }
+
   private resolveSession(sessionId?: string) {
     const session = sessionId ? this.store.get(sessionId) : this.store.getLatest();
     if (!session) {
@@ -129,5 +142,6 @@ export type {
   JsProfileSummary,
   JsSessionListEntry,
   JsSliceResult,
+  JsSourceMapsResult,
   JsStacksResult,
 } from "./types.js";

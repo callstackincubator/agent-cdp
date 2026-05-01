@@ -22,6 +22,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@jridgewell/trace-mapping": "^0.3.31",
     "ws": "^8.18.3"
   },
   "devDependencies": {

@@ -7,6 +7,7 @@ import type {
   JsProfileSummary,
   JsSessionListEntry,
   JsSliceResult,
+  JsSourceMapsResult,
   JsStacksResult,
 } from "./types.js";
 
@@ -30,6 +31,24 @@ export function querySummary(session: JsProfileSession): JsProfileSummary {
   const caveats = [...CAVEATS_DEFAULT];
   if (session.samplingIntervalUs === undefined) {
     caveats.push("Sampling interval not configured — using runtime default");
+  }
+
+  const sm = session.sourceMaps;
+  const symbolicatedPct =
+    sm.totalMappableFrameCount > 0
+      ? round1((sm.symbolicatedFrameCount / sm.totalMappableFrameCount) * 100)
+      : 0;
+
+  const sourceMapsNotes: string[] = [];
+  if (sm.state === "full") {
+    sourceMapsNotes.push("Module rollups and hotspots use original source files");
+  } else if (sm.state === "partial") {
+    sourceMapsNotes.push("Module rollups use original source files where available");
+    sourceMapsNotes.push("Some frames could not be mapped from bundle positions");
+  } else if (sm.state === "failed") {
+    sourceMapsNotes.push("Source map resolution failed — reporting bundle-level data");
+  } else {
+    sourceMapsNotes.push("No bundle scripts detected — reporting raw frame URLs");
   }
 
   const topHotspots = session.hotspots
@@ -70,12 +89,38 @@ export function querySummary(session: JsProfileSession): JsProfileSummary {
       durationMs: Math.round(session.durationMs),
       sampleCount: session.sampleCount,
       samplingIntervalUs: session.samplingIntervalUs,
-      symbolicationState: "raw",
+      symbolicationState: sm.state,
+    },
+    sourceMaps: {
+      state: sm.state,
+      bundleCount: sm.bundleUrls.length,
+      resolvedCount: sm.resolvedSourceMapUrls.length,
+      symbolicatedFramePercent: symbolicatedPct,
+      notes: sourceMapsNotes,
     },
     topHotspots,
     topModules,
     topStacks,
     caveats,
+  };
+}
+
+export function querySourceMaps(session: JsProfileSession): JsSourceMapsResult {
+  const sm = session.sourceMaps;
+  const symbolicatedPct =
+    sm.totalMappableFrameCount > 0
+      ? round1((sm.symbolicatedFrameCount / sm.totalMappableFrameCount) * 100)
+      : 0;
+
+  return {
+    sessionId: session.sessionId,
+    state: sm.state,
+    bundleUrls: sm.bundleUrls,
+    resolvedSourceMapUrls: sm.resolvedSourceMapUrls,
+    symbolicatedFrameCount: sm.symbolicatedFrameCount,
+    totalMappableFrameCount: sm.totalMappableFrameCount,
+    symbolicatedFramePercent: symbolicatedPct,
+    failures: sm.failures,
   };
 }
 
@@ -161,6 +206,10 @@ export function queryHotspotDetail(
       moduleName: frame.moduleName,
       isNative: frame.isNative,
       isRuntime: frame.isRuntime,
+      symbolicationStatus: frame.symbolicationStatus,
+      bundleUrl: frame.bundleUrl,
+      bundleLineNumber: frame.bundleLineNumber,
+      bundleColumnNumber: frame.bundleColumnNumber,
     },
     representativeStacks,
     activeTimeBuckets,
