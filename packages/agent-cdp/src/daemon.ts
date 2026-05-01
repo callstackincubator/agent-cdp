@@ -3,6 +3,7 @@ import net from "node:net";
 import path from "node:path";
 
 import { ConsoleCollector } from "./console.js";
+import { JsProfiler } from "./js-profiler/index.js";
 import { MemorySnapshotter } from "./memory.js";
 import { createTargetProviders } from "./providers.js";
 import { SessionManager } from "./session-manager.js";
@@ -41,6 +42,7 @@ class Daemon {
   private readonly providers = createTargetProviders();
   private readonly sessionManager = new SessionManager(this.providers);
   private readonly traceRecorder = new TraceRecorder();
+  private readonly jsProfiler = new JsProfiler();
   private ipcServer: net.Server | null = null;
 
   async start(): Promise<void> {
@@ -182,6 +184,99 @@ class Daemon {
       if (command.type === "capture-memory") {
         const session = await this.requireSession();
         return { ok: true, data: await this.memorySnapshotter.capture(session, command.filePath) };
+      }
+
+      if (command.type === "js-profile-start") {
+        const session = await this.requireSession();
+        await this.jsProfiler.start(session, command.name, command.samplingIntervalUs);
+        return { ok: true, data: "JS profile started" };
+      }
+
+      if (command.type === "js-profile-stop") {
+        const session = await this.requireSession();
+        const sessionId = await this.jsProfiler.stop(session);
+        return { ok: true, data: sessionId };
+      }
+
+      if (command.type === "js-profile-status") {
+        return { ok: true, data: this.jsProfiler.getStatus() };
+      }
+
+      if (command.type === "js-profile-list-sessions") {
+        return { ok: true, data: this.jsProfiler.listSessions(command.limit, command.offset) };
+      }
+
+      if (command.type === "js-profile-summary") {
+        return { ok: true, data: this.jsProfiler.getSummary(command.sessionId) };
+      }
+
+      if (command.type === "js-profile-hotspots") {
+        return {
+          ok: true,
+          data: this.jsProfiler.getHotspots({
+            sessionId: command.sessionId,
+            limit: command.limit,
+            offset: command.offset,
+            sortBy: command.sortBy,
+            minSelfMs: command.minSelfMs,
+            includeRuntime: command.includeRuntime,
+          }),
+        };
+      }
+
+      if (command.type === "js-profile-hotspot") {
+        return {
+          ok: true,
+          data: this.jsProfiler.getHotspotDetail(command.hotspotId, command.sessionId, command.stackLimit),
+        };
+      }
+
+      if (command.type === "js-profile-modules") {
+        return {
+          ok: true,
+          data: this.jsProfiler.getModules({
+            sessionId: command.sessionId,
+            limit: command.limit,
+            offset: command.offset,
+            sortBy: command.sortBy,
+          }),
+        };
+      }
+
+      if (command.type === "js-profile-stacks") {
+        return {
+          ok: true,
+          data: this.jsProfiler.getStacks({
+            sessionId: command.sessionId,
+            limit: command.limit,
+            offset: command.offset,
+            minMs: command.minMs,
+            maxDepth: command.maxDepth,
+          }),
+        };
+      }
+
+      if (command.type === "js-profile-slice") {
+        return {
+          ok: true,
+          data: this.jsProfiler.getSlice(command.startMs, command.endMs, command.sessionId, command.limit),
+        };
+      }
+
+      if (command.type === "js-profile-diff") {
+        return {
+          ok: true,
+          data: this.jsProfiler.getDiff(
+            command.baseSessionId,
+            command.compareSessionId,
+            command.limit,
+            command.minDeltaPct,
+          ),
+        };
+      }
+
+      if (command.type === "js-profile-export") {
+        return { ok: true, data: this.jsProfiler.getRawProfile(command.sessionId) };
       }
 
       const status: StatusInfo = {
