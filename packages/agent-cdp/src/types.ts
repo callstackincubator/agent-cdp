@@ -108,7 +108,8 @@ export type IpcCommand =
   | { type: "js-profile-stacks"; sessionId?: string; limit?: number; offset?: number; minMs?: number; maxDepth?: number }
   | { type: "js-profile-slice"; sessionId?: string; startMs: number; endMs: number; limit?: number }
   | { type: "js-profile-diff"; baseSessionId: string; compareSessionId: string; limit?: number; minDeltaPct?: number }
-  | { type: "js-profile-export"; sessionId?: string };
+  | { type: "js-profile-export"; sessionId?: string }
+  | { type: "js-profile-source-maps"; sessionId?: string };
 
 export interface IpcResponse {
   ok: boolean;

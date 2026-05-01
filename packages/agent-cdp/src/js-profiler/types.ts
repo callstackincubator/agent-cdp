@@ -22,6 +22,25 @@ export interface CdpProfile {
   timeDeltas?: number[];
 }
 
+// Symbolication types
+
+export type SymbolicationStatus = "symbolicated" | "bundle-level" | "not-applicable";
+export type SourceMapState = "none" | "partial" | "full" | "failed";
+
+export interface SymbolicationFailure {
+  bundleUrl: string;
+  reason: string;
+}
+
+export interface SourceMapsInfo {
+  state: SourceMapState;
+  bundleUrls: string[];
+  resolvedSourceMapUrls: string[];
+  symbolicatedFrameCount: number;
+  totalMappableFrameCount: number;
+  failures: SymbolicationFailure[];
+}
+
 // Normalized session model
 
 export interface JsFrame {
@@ -34,6 +53,10 @@ export interface JsFrame {
   isNative: boolean;
   isRuntime: boolean;
   isAnonymous: boolean;
+  symbolicationStatus: SymbolicationStatus;
+  bundleUrl?: string;
+  bundleLineNumber?: number;
+  bundleColumnNumber?: number;
 }
 
 export interface JsHotspot {
@@ -90,6 +113,7 @@ export interface JsProfileSession {
   sampleTimestampsMs: number[];
   sampleHotspotIds: (string | null)[];
   rawProfile: unknown;
+  sourceMaps: SourceMapsInfo;
 }
 
 // IPC result shapes
@@ -109,6 +133,17 @@ export interface JsSessionListEntry {
   startedAt: number;
 }
 
+export interface JsSourceMapsResult {
+  sessionId: string;
+  state: SourceMapState;
+  bundleUrls: string[];
+  resolvedSourceMapUrls: string[];
+  symbolicatedFrameCount: number;
+  totalMappableFrameCount: number;
+  symbolicatedFramePercent: number;
+  failures: SymbolicationFailure[];
+}
+
 export interface JsProfileSummary {
   session: {
     sessionId: string;
@@ -116,7 +151,14 @@ export interface JsProfileSummary {
     durationMs: number;
     sampleCount: number;
     samplingIntervalUs: number | undefined;
-    symbolicationState: "raw";
+    symbolicationState: SourceMapState;
+  };
+  sourceMaps: {
+    state: SourceMapState;
+    bundleCount: number;
+    resolvedCount: number;
+    symbolicatedFramePercent: number;
+    notes: string[];
   };
   topHotspots: Array<{
     hotspotId: string;
@@ -177,6 +219,10 @@ export interface JsHotspotDetailResult {
     moduleName: string;
     isNative: boolean;
     isRuntime: boolean;
+    symbolicationStatus: SymbolicationStatus;
+    bundleUrl?: string;
+    bundleLineNumber?: number;
+    bundleColumnNumber?: number;
   };
   representativeStacks: Array<{
     stackId: string;

@@ -1,3 +1,5 @@
+import type { SymbolicationResult } from "./source-map.js";
+import { isHttpUrl } from "./source-map.js";
 import type {
   CdpProfile,
   JsFrame,
@@ -6,6 +8,8 @@ import type {
   JsProfileSession,
   JsStackSignature,
   JsTimeBucket,
+  SourceMapState,
+  SourceMapsInfo,
 } from "./types.js";
 
 const NOISE_NAMES = new Set([
@@ -30,24 +34,22 @@ interface NormalizeMeta {
   samplingIntervalUs: number | undefined;
 }
 
-export function normalizeProfile(rawProfile: unknown, meta: NormalizeMeta): JsProfileSession {
+export function normalizeProfile(
+  rawProfile: unknown,
+  meta: NormalizeMeta,
+  sym?: SymbolicationResult,
+): JsProfileSession {
   const profile = rawProfile as CdpProfile;
   const { nodes, samples = [], timeDeltas = [], startTime, endTime } = profile;
 
   const durationMs = (endTime - startTime) / 1000;
 
-  // Node lookups
   const nodeById = new Map<number, CdpProfile["nodes"][0]>();
-  for (const node of nodes) {
-    nodeById.set(node.id, node);
-  }
+  for (const node of nodes) nodeById.set(node.id, node);
 
-  // Parent map built from children arrays
   const parentById = new Map<number, number>();
   for (const node of nodes) {
-    for (const childId of node.children ?? []) {
-      parentById.set(childId, node.id);
-    }
+    for (const childId of node.children ?? []) parentById.set(childId, node.id);
   }
 
   // Per-sample timestamps relative to recording start (ms)
@@ -60,44 +62,72 @@ export function normalizeProfile(rawProfile: unknown, meta: NormalizeMeta): JsPr
 
   const timePerSampleMs = samples.length > 0 ? durationMs / samples.length : 0;
 
-  // Frame registry keyed by identity
+  // Frame registry keyed by identity (original position when symbolicated, otherwise bundle)
   const frameByKey = new Map<string, JsFrame>();
   let frameCounter = 0;
 
-  function frameKey(cf: { functionName: string; url: string; lineNumber: number; columnNumber: number }): string {
+  function makeFrameKey(
+    cf: { functionName: string; url: string; lineNumber: number; columnNumber: number },
+    origSource?: string | null,
+    origLine?: number | null,
+    origCol?: number | null,
+  ): string {
+    if (origSource) {
+      return `${cf.functionName}|${origSource}|${origLine ?? 0}|${origCol ?? 0}`;
+    }
     return `${cf.functionName}|${cf.url}|${cf.lineNumber}|${cf.columnNumber}`;
   }
 
   function getOrCreateFrame(node: (typeof nodes)[0]): JsFrame {
     const cf = node.callFrame;
-    const key = frameKey(cf);
+    const orig = sym?.getOriginalPosition(cf.url, cf.lineNumber, cf.columnNumber) ?? null;
+    const key = makeFrameKey(cf, orig?.source, orig?.line, orig?.column);
 
     if (!frameByKey.has(key)) {
-      frameCounter++;
+      const url = orig ? orig.source : cf.url;
+      const line = orig ? orig.line : cf.lineNumber;
+      const col = orig ? orig.column : cf.columnNumber;
+      const funcName = orig?.name || cf.functionName || "(anonymous)";
+
       const isNative = cf.url.startsWith("native ");
       const isRuntime =
         RUNTIME_NAMES.has(cf.functionName) || (!cf.url && cf.functionName.startsWith("("));
-      const isAnonymous = !cf.functionName || cf.functionName === "(anonymous)";
+      const isAnonymous = !funcName || funcName === "(anonymous)";
 
-      frameByKey.set(key, {
-        frameId: `f${frameCounter}`,
-        functionName: cf.functionName || "(anonymous)",
-        url: cf.url,
-        lineNumber: cf.lineNumber,
-        columnNumber: cf.columnNumber,
-        moduleName: deriveModuleName(cf.url),
+      const symbolicationStatus = orig
+        ? "symbolicated"
+        : sym?.isBundleUrl(cf.url)
+          ? "bundle-level"
+          : isHttpUrl(cf.url)
+            ? "bundle-level"  // HTTP URL but no source map resolved for it
+            : "not-applicable";
+
+      const frame: JsFrame = {
+        frameId: `f${++frameCounter}`,
+        functionName: funcName,
+        url,
+        lineNumber: line,
+        columnNumber: col,
+        moduleName: deriveModuleName(url),
         isNative,
         isRuntime,
         isAnonymous,
-      });
+        symbolicationStatus,
+      };
+
+      if (orig) {
+        frame.bundleUrl = cf.url;
+        frame.bundleLineNumber = cf.lineNumber;
+        frame.bundleColumnNumber = cf.columnNumber;
+      }
+
+      frameByKey.set(key, frame);
     }
 
     return frameByKey.get(key)!;
   }
 
-  for (const node of nodes) {
-    getOrCreateFrame(node);
-  }
+  for (const node of nodes) getOrCreateFrame(node);
 
   // Ancestor chain for a node: leaf first, root last
   function getAncestors(nodeId: number): number[] {
@@ -112,7 +142,13 @@ export function normalizeProfile(rawProfile: unknown, meta: NormalizeMeta): JsPr
     return chain;
   }
 
-  // Self and total sample counts per frame key
+  // Node key: same as frame key, for self/total count tracking
+  function nodeKey(node: (typeof nodes)[0]): string {
+    const cf = node.callFrame;
+    const orig = sym?.getOriginalPosition(cf.url, cf.lineNumber, cf.columnNumber) ?? null;
+    return makeFrameKey(cf, orig?.source, orig?.line, orig?.column);
+  }
+
   const selfCounts = new Map<string, number>();
   const totalCounts = new Map<string, number>();
 
@@ -120,7 +156,7 @@ export function normalizeProfile(rawProfile: unknown, meta: NormalizeMeta): JsPr
     const leafNode = nodeById.get(sampleNodeId);
     if (!leafNode) continue;
 
-    const lk = frameKey(leafNode.callFrame);
+    const lk = nodeKey(leafNode);
     selfCounts.set(lk, (selfCounts.get(lk) ?? 0) + 1);
 
     const ancestors = getAncestors(sampleNodeId);
@@ -128,7 +164,7 @@ export function normalizeProfile(rawProfile: unknown, meta: NormalizeMeta): JsPr
     for (const nodeId of ancestors) {
       const n = nodeById.get(nodeId);
       if (!n) continue;
-      const k = frameKey(n.callFrame);
+      const k = nodeKey(n);
       if (!seen.has(k)) {
         seen.add(k);
         totalCounts.set(k, (totalCounts.get(k) ?? 0) + 1);
@@ -136,7 +172,7 @@ export function normalizeProfile(rawProfile: unknown, meta: NormalizeMeta): JsPr
     }
   }
 
-  // Build hotspots: one per frame that has self hits and is not noise
+  // Build hotspots
   const hotspots: JsHotspot[] = [];
   const frameKeyToHotspotId = new Map<string, string>();
   let hotspotCounter = 0;
@@ -167,9 +203,7 @@ export function normalizeProfile(rawProfile: unknown, meta: NormalizeMeta): JsPr
   hotspots.sort((a, b) => b.selfSampleCount - a.selfSampleCount);
 
   const hotspotsById = new Map<string, JsHotspot>();
-  for (const h of hotspots) {
-    hotspotsById.set(h.hotspotId, h);
-  }
+  for (const h of hotspots) hotspotsById.set(h.hotspotId, h);
 
   // Module rollups
   const moduleSelf = new Map<string, number>();
@@ -180,7 +214,6 @@ export function normalizeProfile(rawProfile: unknown, meta: NormalizeMeta): JsPr
     const self = selfCounts.get(key) ?? 0;
     const total = totalCounts.get(key) ?? 0;
     if (self === 0 && total === 0) continue;
-
     const mod = frame.moduleName;
     moduleSelf.set(mod, (moduleSelf.get(mod) ?? 0) + self);
     moduleTotal.set(mod, (moduleTotal.get(mod) ?? 0) + total);
@@ -212,7 +245,7 @@ export function normalizeProfile(rawProfile: unknown, meta: NormalizeMeta): JsPr
       if (frameIds.length >= MAX_STACK_FRAMES) break;
       const n = nodeById.get(nodeId);
       if (!n) continue;
-      const frame = frameByKey.get(frameKey(n.callFrame));
+      const frame = frameByKey.get(nodeKey(n));
       if (!frame || frame.isRuntime || NOISE_NAMES.has(frame.functionName)) continue;
       frameIds.push(frame.frameId);
       frameNames.push(frame.functionName);
@@ -235,21 +268,17 @@ export function normalizeProfile(rawProfile: unknown, meta: NormalizeMeta): JsPr
   const stacks: JsStackSignature[] = [...sigByKey.values()]
     .sort((a, b) => b.count - a.count)
     .slice(0, MAX_STACK_SIGNATURES)
-    .map((sig) => {
-      stackCounter++;
-      return {
-        stackId: `s${stackCounter}`,
-        frameIds: sig.frameIds,
-        frames: sig.frames,
-        sampleCount: sig.count,
-        timeMs: sig.timeMs,
-        percent: samples.length > 0 ? (sig.count / samples.length) * 100 : 0,
-      };
-    });
+    .map((sig) => ({
+      stackId: `s${++stackCounter}`,
+      frameIds: sig.frameIds,
+      frames: sig.frames,
+      sampleCount: sig.count,
+      timeMs: sig.timeMs,
+      percent: samples.length > 0 ? (sig.count / samples.length) * 100 : 0,
+    }));
 
   // Time buckets
   const bucketWidthMs = durationMs > 0 ? durationMs / BUCKET_COUNT : 1;
-
   const bucketAccs = Array.from({ length: BUCKET_COUNT }, (_, idx) => ({
     startMs: idx * bucketWidthMs,
     endMs: (idx + 1) * bucketWidthMs,
@@ -269,11 +298,9 @@ export function normalizeProfile(rawProfile: unknown, meta: NormalizeMeta): JsPr
     let hotspotId: string | null = null;
 
     if (sampleNode) {
-      const k = frameKey(sampleNode.callFrame);
+      const k = nodeKey(sampleNode);
       hotspotId = frameKeyToHotspotId.get(k) ?? null;
-      if (hotspotId) {
-        bucket.counts.set(hotspotId, (bucket.counts.get(hotspotId) ?? 0) + 1);
-      }
+      if (hotspotId) bucket.counts.set(hotspotId, (bucket.counts.get(hotspotId) ?? 0) + 1);
     }
 
     sampleHotspotIds.push(hotspotId);
@@ -291,9 +318,10 @@ export function normalizeProfile(rawProfile: unknown, meta: NormalizeMeta): JsPr
 
   // Final frame map by ID
   const frames = new Map<string, JsFrame>();
-  for (const frame of frameByKey.values()) {
-    frames.set(frame.frameId, frame);
-  }
+  for (const frame of frameByKey.values()) frames.set(frame.frameId, frame);
+
+  // Source map metadata
+  const sourceMaps = buildSourceMapsInfo(sym);
 
   return {
     sessionId: meta.sessionId,
@@ -312,6 +340,42 @@ export function normalizeProfile(rawProfile: unknown, meta: NormalizeMeta): JsPr
     sampleTimestampsMs,
     sampleHotspotIds,
     rawProfile,
+    sourceMaps,
+  };
+}
+
+function buildSourceMapsInfo(sym: SymbolicationResult | undefined): SourceMapsInfo {
+  if (!sym || sym.bundleUrls.length === 0) {
+    return {
+      state: "none",
+      bundleUrls: [],
+      resolvedSourceMapUrls: [],
+      symbolicatedFrameCount: 0,
+      totalMappableFrameCount: 0,
+      failures: sym?.failures ?? [],
+    };
+  }
+
+  const { bundleUrls, resolvedSourceMapUrls, failures, totalMappableFrames, symbolicatedCount } = sym;
+
+  let state: SourceMapState;
+  if (failures.length > 0 && resolvedSourceMapUrls.length === 0) {
+    state = "failed";
+  } else if (totalMappableFrames > 0 && symbolicatedCount === totalMappableFrames) {
+    state = "full";
+  } else if (symbolicatedCount > 0) {
+    state = "partial";
+  } else {
+    state = "failed";
+  }
+
+  return {
+    state,
+    bundleUrls,
+    resolvedSourceMapUrls,
+    symbolicatedFrameCount: symbolicatedCount,
+    totalMappableFrameCount: totalMappableFrames,
+    failures,
   };
 }
 

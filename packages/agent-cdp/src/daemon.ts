@@ -279,6 +279,10 @@ class Daemon {
         return { ok: true, data: this.jsProfiler.getRawProfile(command.sessionId) };
       }
 
+      if (command.type === "js-profile-source-maps") {
+        return { ok: true, data: this.jsProfiler.getSourceMaps(command.sessionId) };
+      }
+
       const status: StatusInfo = {
         daemonRunning: true,
         uptime: Date.now() - this.startedAt,

@@ -7,6 +7,7 @@ import type {
   JsProfileSummary,
   JsSessionListEntry,
   JsSliceResult,
+  JsSourceMapsResult,
   JsStacksResult,
 } from "./types.js";
 
@@ -44,6 +45,10 @@ export function formatJsProfileSummary(summary: JsProfileSummary): string {
       s.samplingIntervalUs ? ` | Interval: ${s.samplingIntervalUs}μs` : ""
     }`,
   );
+
+  const sm = summary.sourceMaps;
+  lines.push(`Source maps: ${sm.state}${sm.bundleCount > 0 ? ` (${sm.symbolicatedFramePercent}% frames symbolicated)` : ""}`);
+  for (const note of sm.notes) lines.push(`  - ${note}`);
 
   if (summary.topHotspots.length > 0) {
     lines.push("");
@@ -106,8 +111,16 @@ export function formatJsHotspotDetail(result: JsHotspotDetailResult): string {
 
   lines.push(`Hotspot ${h.hotspotId}: ${f.functionName}`);
   lines.push(`  Module: ${f.moduleName}`);
-  if (f.url) {
-    lines.push(`  File: ${f.url}:${f.lineNumber}:${f.columnNumber}`);
+  if (f.symbolicationStatus === "symbolicated" && f.url) {
+    lines.push(`  Source: ${f.url}:${f.lineNumber + 1}:${f.columnNumber}`);
+    if (f.bundleUrl) {
+      lines.push(`  Bundle: ${f.bundleUrl}:${(f.bundleLineNumber ?? 0) + 1}:${f.bundleColumnNumber ?? 0}`);
+    }
+  } else if (f.url) {
+    lines.push(`  File: ${f.url}:${f.lineNumber + 1}:${f.columnNumber}`);
+    if (f.symbolicationStatus === "bundle-level") {
+      lines.push(`  Symbolication: not mapped`);
+    }
   }
   lines.push(`  Self:  ${h.selfPercent}% (${h.selfTimeMs}ms, ${h.selfSampleCount} samples)`);
   lines.push(`  Total: ${h.totalPercent}% (${h.totalTimeMs}ms, ${h.totalSampleCount} samples)`);
@@ -237,6 +250,40 @@ export function formatJsDiff(result: JsDiffResult): string {
     lines.push("");
     lines.push("Caveats:");
     for (const c of result.caveats) lines.push(`  - ${c}`);
+  }
+
+  return lines.join("\n");
+}
+
+export function formatJsSourceMaps(result: JsSourceMapsResult): string {
+  const lines: string[] = [];
+  lines.push(`Source maps — session ${result.sessionId}`);
+  lines.push(`  State: ${result.state}`);
+
+  if (result.totalMappableFrameCount > 0) {
+    lines.push(`  Coverage: ${result.symbolicatedFramePercent}% (${result.symbolicatedFrameCount}/${result.totalMappableFrameCount} frames)`);
+  }
+
+  if (result.bundleUrls.length > 0) {
+    lines.push("");
+    lines.push("  Bundles detected:");
+    for (const url of result.bundleUrls) lines.push(`    ${url}`);
+  }
+
+  if (result.resolvedSourceMapUrls.length > 0) {
+    lines.push("");
+    lines.push("  Source maps resolved:");
+    for (const url of result.resolvedSourceMapUrls) lines.push(`    ${url}`);
+  }
+
+  if (result.failures.length > 0) {
+    lines.push("");
+    lines.push("  Failures:");
+    for (const f of result.failures) lines.push(`    ${f.bundleUrl}: ${f.reason}`);
+  }
+
+  if (result.bundleUrls.length === 0 && result.failures.length === 0) {
+    lines.push("  No bundle scripts detected in this profile.");
   }
 
   return lines.join("\n");
