@@ -6,6 +6,7 @@ import type {
   TargetDescriptor,
   TargetProvider,
 } from "./types.js";
+import { discoverTargets } from "./discovery.js";
 
 export class PersistentRuntimeSession implements RuntimeSession {
   constructor(
@@ -27,21 +28,13 @@ export class SessionManager {
   private sessionState: SessionState = "disconnected";
   private selectedOptions: DiscoveryOptions | null = null;
 
-  constructor(private readonly providers: TargetProvider[]) {}
+  constructor(
+    private readonly providers: TargetProvider[],
+    private readonly discoverTargetsImpl: (options: DiscoveryOptions) => Promise<TargetDescriptor[]> = discoverTargets,
+  ) {}
 
   async listTargets(options: DiscoveryOptions): Promise<TargetDescriptor[]> {
-    const targets: TargetDescriptor[] = [];
-
-    for (const provider of this.providers) {
-      const sourceUrl = provider.kind === "chrome" ? options.chromeUrl : options.reactNativeUrl;
-      if (!sourceUrl) {
-        continue;
-      }
-      const providerTargets = await provider.listTargets(sourceUrl);
-      targets.push(...providerTargets);
-    }
-
-    return targets;
+    return this.discoverTargetsImpl(options);
   }
 
   async selectTarget(targetId: string, options: DiscoveryOptions): Promise<TargetDescriptor> {

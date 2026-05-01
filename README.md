@@ -36,14 +36,14 @@ pnpm run agent-cdp -- status
 List available targets:
 
 ```sh
-pnpm run agent-cdp -- target list --chrome-url http://127.0.0.1:9222
-pnpm run agent-cdp -- target list --react-native-url http://127.0.0.1:8081
+pnpm run agent-cdp -- target list --url http://127.0.0.1:9222
+pnpm run agent-cdp -- target list --url http://127.0.0.1:8081
 ```
 
 Select a target:
 
 ```sh
-pnpm run agent-cdp -- target select <target-id> --chrome-url http://127.0.0.1:9222
+pnpm run agent-cdp -- target select <target-id> --url http://127.0.0.1:9222
 ```
 
 Read console messages:
@@ -81,8 +81,8 @@ Daemon:
   status
 
 Targets:
-  target list [--chrome-url URL] [--react-native-url URL]
-  target select <id> [--chrome-url URL] [--react-native-url URL]
+  target list --url URL
+  target select <id> --url URL
   target clear
 
 Console:
@@ -99,6 +99,5 @@ Memory:
 
 ## Notes
 
-- Chrome discovery expects a running remote-debugging endpoint, typically `http://127.0.0.1:9222`.
-- React Native discovery expects Metro or another server exposing `@react-native/dev-middleware`, typically `http://127.0.0.1:8081`.
+- Discovery expects a CDP-compatible `/json/list` endpoint, for example Chrome on `http://127.0.0.1:9222` or React Native dev middleware on `http://127.0.0.1:8081`.
 - Trace reporting and heap snapshot analysis are not implemented yet; current support is raw capture only.

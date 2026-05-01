@@ -1,4 +1,4 @@
-import { buildTargetId, getDiscoveryUrls, mapChromeTarget, mapReactNativeTarget } from "../discovery.js";
+import { buildTargetId, getDiscoveryUrl, mapChromeTarget, mapReactNativeTarget } from "../discovery.js";
 
 describe("discovery helpers", () => {
   it("builds deterministic target ids", () => {
@@ -7,11 +7,8 @@ describe("discovery helpers", () => {
     );
   });
 
-  it("maps configured discovery urls", () => {
-    expect(getDiscoveryUrls({ chromeUrl: "http://127.0.0.1:9222/", reactNativeUrl: "http://127.0.0.1:8081/" })).toEqual([
-      { kind: "chrome", url: "http://127.0.0.1:9222" },
-      { kind: "react-native", url: "http://127.0.0.1:8081" },
-    ]);
+  it("maps the configured discovery url", () => {
+    expect(getDiscoveryUrl({ url: "http://127.0.0.1:9222/" })).toBe("http://127.0.0.1:9222");
   });
 
   it("maps chrome targets", () => {

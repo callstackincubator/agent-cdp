@@ -30,20 +30,6 @@ class FakeTransport implements CdpTransport {
 class FakeProvider implements TargetProvider {
   readonly kind = "chrome" as const;
 
-  async listTargets(): Promise<TargetDescriptor[]> {
-    return [
-      {
-        id: "chrome:test:page-1",
-        rawId: "page-1",
-        title: "Example",
-        kind: "chrome",
-        description: "Test page",
-        webSocketDebuggerUrl: "ws://example.test/devtools/page/1",
-        sourceUrl: "http://example.test",
-      },
-    ];
-  }
-
   createTransport(): CdpTransport {
     return new FakeTransport();
   }
@@ -51,13 +37,35 @@ class FakeProvider implements TargetProvider {
 
 describe("SessionManager", () => {
   it("lists targets from configured providers", async () => {
-    const manager = new SessionManager([new FakeProvider()]);
-    await expect(manager.listTargets({ chromeUrl: "http://example.test" })).resolves.toHaveLength(1);
+    const targets = [
+      {
+        id: "chrome:test:page-1",
+        rawId: "page-1",
+        title: "Example",
+        kind: "chrome" as const,
+        description: "Test page",
+        webSocketDebuggerUrl: "ws://example.test/devtools/page/1",
+        sourceUrl: "http://example.test",
+      },
+    ];
+    const manager = new SessionManager([new FakeProvider()], () => Promise.resolve(targets));
+    await expect(manager.listTargets({ url: "http://example.test" })).resolves.toHaveLength(1);
   });
 
   it("selects and clears a target", async () => {
-    const manager = new SessionManager([new FakeProvider()]);
-    await expect(manager.selectTarget("chrome:test:page-1", { chromeUrl: "http://example.test" })).resolves.toMatchObject({
+    const targets = [
+      {
+        id: "chrome:test:page-1",
+        rawId: "page-1",
+        title: "Example",
+        kind: "chrome" as const,
+        description: "Test page",
+        webSocketDebuggerUrl: "ws://example.test/devtools/page/1",
+        sourceUrl: "http://example.test",
+      },
+    ];
+    const manager = new SessionManager([new FakeProvider()], () => Promise.resolve(targets));
+    await expect(manager.selectTarget("chrome:test:page-1", { url: "http://example.test" })).resolves.toMatchObject({
       title: "Example",
     });
     expect(manager.getSessionState()).toBe("connected");
@@ -98,8 +106,34 @@ describe("SessionManager", () => {
       }
     }
 
-    const manager = new SessionManager([new FakeReactNativeProvider()]);
-    await manager.selectTarget("react-native:test:page-1", { reactNativeUrl: "http://example.test" });
+    const discoverTargetsImpl = (() => {
+      let attempt = 0;
+
+      return () => {
+        attempt += 1;
+        return Promise.resolve([
+          {
+            id: `react-native:test:page-${attempt}`,
+            rawId: `page-${attempt}`,
+            title: "React Native Experimental",
+            kind: "react-native" as const,
+            description: "RN target",
+            appId: "com.example.app",
+            webSocketDebuggerUrl: `ws://example.test/inspector/debug?page=${attempt}`,
+            sourceUrl: "http://example.test",
+            reactNative: {
+              logicalDeviceId: "device-1",
+              capabilities: {
+                nativePageReloads: true,
+              },
+            },
+          },
+        ]);
+      };
+    })();
+
+    const manager = new SessionManager([new FakeReactNativeProvider()], discoverTargetsImpl);
+    await manager.selectTarget("react-native:test:page-1", { url: "http://example.test" });
     const session = manager.getSession();
     if (!session) {
       throw new Error("Expected session to exist");

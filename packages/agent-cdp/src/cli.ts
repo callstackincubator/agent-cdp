@@ -25,8 +25,8 @@ Daemon:
   status    Show daemon status
 
 Targets:
-  target list [--chrome-url URL] [--react-native-url URL]
-  target select <id> [--chrome-url URL] [--react-native-url URL]
+  target list --url URL
+  target select <id> --url URL
   target clear
 
 Console:
@@ -99,8 +99,7 @@ function readMemorySummary(data: unknown): MemorySnapshotSummary {
 
 function discoveryOptionsFromFlags(flags: Record<string, string | boolean>): DiscoveryOptions {
   return {
-    chromeUrl: typeof flags["chrome-url"] === "string" ? flags["chrome-url"] : undefined,
-    reactNativeUrl: typeof flags["react-native-url"] === "string" ? flags["react-native-url"] : undefined,
+    url: typeof flags.url === "string" ? flags.url : undefined,
   };
 }
 
@@ -159,7 +158,7 @@ async function main(): Promise<void> {
   if (cmd === "target" && command[1] === "select") {
     const targetId = command[2];
     if (!targetId) {
-      throw new Error("Usage: agent-cdp target select <id> [--chrome-url URL] [--react-native-url URL]");
+      throw new Error("Usage: agent-cdp target select <id> --url URL");
     }
     await ensureDaemon();
     const response = await sendCommand({

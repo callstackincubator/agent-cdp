@@ -52,11 +52,11 @@ extract_target_id() {
 run_cmd "pnpm run build"
 run_cmd "pnpm run --silent agent-cdp -- start"
 run_cmd "pnpm run --silent agent-cdp -- status"
-run_cmd "pnpm run --silent agent-cdp -- target list --react-native-url $RN_URL"
+run_cmd "pnpm run --silent agent-cdp -- target list --url $RN_URL"
 
 TARGET_ID=""
 if TARGET_ID=$(extract_target_id); then
-  run_cmd "pnpm run --silent agent-cdp -- target select \"$TARGET_ID\" --react-native-url $RN_URL"
+  run_cmd "pnpm run --silent agent-cdp -- target select \"$TARGET_ID\" --url $RN_URL"
   run_cmd "pnpm run --silent agent-cdp -- console list --limit 20"
   run_cmd "pnpm run --silent agent-cdp -- trace start"
   run_cmd "pnpm run --silent agent-cdp -- trace stop --file $TRACE_FILE"

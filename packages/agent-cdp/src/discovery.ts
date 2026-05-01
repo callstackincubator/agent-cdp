@@ -29,21 +29,8 @@ export function buildTargetId(kind: TargetDescriptor["kind"], sourceUrl: string,
   return `${kind}:${encodeURIComponent(normalizeBaseUrl(sourceUrl))}:${rawId}`;
 }
 
-export function getDiscoveryUrls(options: DiscoveryOptions): Array<{
-  kind: TargetDescriptor["kind"];
-  url: string;
-}> {
-  const urls: Array<{ kind: TargetDescriptor["kind"]; url: string }> = [];
-
-  if (options.chromeUrl) {
-    urls.push({ kind: "chrome", url: normalizeBaseUrl(options.chromeUrl) });
-  }
-
-  if (options.reactNativeUrl) {
-    urls.push({ kind: "react-native", url: normalizeBaseUrl(options.reactNativeUrl) });
-  }
-
-  return urls;
+export function getDiscoveryUrl(options: DiscoveryOptions): string | null {
+  return options.url ? normalizeBaseUrl(options.url) : null;
 }
 
 export function mapChromeTarget(sourceUrl: string, target: ChromeJsonTarget): TargetDescriptor | null {
@@ -94,4 +81,22 @@ export async function fetchJsonTargets<T>(baseUrl: string): Promise<T[]> {
   }
 
   return (await response.json()) as T[];
+}
+
+export async function discoverTargets(options: DiscoveryOptions): Promise<TargetDescriptor[]> {
+  const url = getDiscoveryUrl(options);
+  if (!url) {
+    return [];
+  }
+
+  const targets = await fetchJsonTargets<ReactNativeJsonTarget>(url);
+  return targets
+    .map((target) => {
+      if (target.reactNative) {
+        return mapReactNativeTarget(url, target);
+      }
+
+      return mapChromeTarget(url, target);
+    })
+    .filter((target): target is TargetDescriptor => target !== null);
 }

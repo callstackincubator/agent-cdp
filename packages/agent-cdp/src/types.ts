@@ -19,13 +19,11 @@ export interface TargetDescriptor {
 }
 
 export interface DiscoveryOptions {
-  chromeUrl?: string;
-  reactNativeUrl?: string;
+  url?: string;
 }
 
 export interface TargetProvider {
   readonly kind: TargetDescriptor["kind"];
-  listTargets(baseUrl: string): Promise<TargetDescriptor[]>;
   createTransport(target: TargetDescriptor): CdpTransport;
 }
 
