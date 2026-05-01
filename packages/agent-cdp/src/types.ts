@@ -96,7 +96,19 @@ export type IpcCommand =
   | { type: "get-console-message"; id: number }
   | { type: "start-trace" }
   | { type: "stop-trace"; filePath?: string }
-  | { type: "capture-memory"; filePath: string };
+  | { type: "capture-memory"; filePath: string }
+  | { type: "js-profile-start"; name?: string; samplingIntervalUs?: number }
+  | { type: "js-profile-stop" }
+  | { type: "js-profile-status" }
+  | { type: "js-profile-list-sessions"; limit?: number; offset?: number }
+  | { type: "js-profile-summary"; sessionId?: string }
+  | { type: "js-profile-hotspots"; sessionId?: string; limit?: number; offset?: number; sortBy?: string; minSelfMs?: number; includeRuntime?: boolean }
+  | { type: "js-profile-hotspot"; sessionId?: string; hotspotId: string; stackLimit?: number }
+  | { type: "js-profile-modules"; sessionId?: string; limit?: number; offset?: number; sortBy?: string }
+  | { type: "js-profile-stacks"; sessionId?: string; limit?: number; offset?: number; minMs?: number; maxDepth?: number }
+  | { type: "js-profile-slice"; sessionId?: string; startMs: number; endMs: number; limit?: number }
+  | { type: "js-profile-diff"; baseSessionId: string; compareSessionId: string; limit?: number; minDeltaPct?: number }
+  | { type: "js-profile-export"; sessionId?: string };
 
 export interface IpcResponse {
   ok: boolean;
