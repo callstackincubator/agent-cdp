@@ -19,6 +19,7 @@ import {
   formatMemSnapshotInstance,
   formatMemSnapshotInstances,
   formatMemSnapshotList,
+  formatMemSnapshotMeta,
   formatMemSnapshotRetainers,
   formatMemSnapshotSummary,
 } from "./heap-snapshot/formatters.js";
@@ -42,6 +43,7 @@ import {
   formatJsSourceMaps,
   formatJsStacks,
 } from "./js-profiler/formatters.js";
+import type { MemSnapshotMeta } from "./heap-snapshot/types.js";
 import type {
   ConsoleMessage,
   DiscoveryOptions,
@@ -186,6 +188,7 @@ function discoveryOptionsFromFlags(flags: Record<string, string | boolean>): Dis
 async function main(): Promise<void> {
   const { command, flags } = parseArgs(process.argv.slice(2));
   const cmd = command[0];
+  const verbose = flags.verbose === true;
 
   if (!cmd || cmd === "help") {
     console.log(usage());
@@ -219,7 +222,7 @@ async function main(): Promise<void> {
     if (!response.ok) {
       throw new Error(response.error || "Failed to load daemon status");
     }
-    console.log(formatStatus(readStatusInfo(response.data)));
+    console.log(formatStatus(readStatusInfo(response.data), verbose));
     return;
   }
 
@@ -239,7 +242,7 @@ async function main(): Promise<void> {
     if (!response.ok) {
       throw new Error(response.error || "Failed to load daemon status");
     }
-    console.log(formatStatus(readStatusInfo(response.data)));
+    console.log(formatStatus(readStatusInfo(response.data), verbose));
     return;
   }
 
@@ -252,7 +255,7 @@ async function main(): Promise<void> {
     if (!response.ok) {
       throw new Error(response.error || "Failed to list targets");
     }
-    console.log(formatTargetList(readTargets(response.data)));
+    console.log(formatTargetList(readTargets(response.data), verbose));
     return;
   }
 
@@ -306,7 +309,7 @@ async function main(): Promise<void> {
     if (!response.ok) {
       throw new Error(response.error || "Failed to get console message");
     }
-    console.log(formatConsoleMessage(readConsoleMessage(response.data)));
+    console.log(formatConsoleMessage(readConsoleMessage(response.data), verbose));
     return;
   }
 
@@ -327,7 +330,7 @@ async function main(): Promise<void> {
     if (!response.ok) {
       throw new Error(response.error || "Failed to stop trace");
     }
-    console.log(formatTraceSummary(readTraceSummary(response.data)));
+    console.log(formatTraceSummary(readTraceSummary(response.data), verbose));
     return;
   }
 
@@ -341,7 +344,7 @@ async function main(): Promise<void> {
     if (!response.ok) {
       throw new Error(response.error || "Failed to capture heap snapshot");
     }
-    console.log(formatMemorySummary(readMemorySummary(response.data)));
+    console.log(formatMemorySummary(readMemorySummary(response.data), verbose));
     return;
   }
 
@@ -352,7 +355,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "mem-snapshot-capture", name, collectGarbage, filePath });
     if (!response.ok) throw new Error(response.error || "Failed to capture heap snapshot");
-    console.log(JSON.stringify(response.data, null, 2));
+    console.log(formatMemSnapshotMeta(response.data as MemSnapshotMeta, verbose));
     return;
   }
 
@@ -363,7 +366,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "mem-snapshot-load", filePath, name });
     if (!response.ok) throw new Error(response.error || "Failed to load heap snapshot");
-    console.log(JSON.stringify(response.data, null, 2));
+    console.log(formatMemSnapshotMeta(response.data as MemSnapshotMeta, verbose));
     return;
   }
 
@@ -371,7 +374,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "mem-snapshot-list" });
     if (!response.ok) throw new Error(response.error || "Failed to list heap snapshots");
-    console.log(formatMemSnapshotList(response.data as Parameters<typeof formatMemSnapshotList>[0]));
+    console.log(formatMemSnapshotList(response.data as Parameters<typeof formatMemSnapshotList>[0], verbose));
     return;
   }
 
@@ -380,7 +383,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "mem-snapshot-summary", snapshotId });
     if (!response.ok) throw new Error(response.error || "Failed to get snapshot summary");
-    console.log(formatMemSnapshotSummary(response.data as Parameters<typeof formatMemSnapshotSummary>[0]));
+    console.log(formatMemSnapshotSummary(response.data as Parameters<typeof formatMemSnapshotSummary>[0], verbose));
     return;
   }
 
@@ -393,7 +396,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "mem-snapshot-classes", snapshotId, sortBy, limit, offset, filter });
     if (!response.ok) throw new Error(response.error || "Failed to get snapshot classes");
-    console.log(formatMemSnapshotClasses(response.data as Parameters<typeof formatMemSnapshotClasses>[0]));
+    console.log(formatMemSnapshotClasses(response.data as Parameters<typeof formatMemSnapshotClasses>[0], verbose));
     return;
   }
 
@@ -404,7 +407,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "mem-snapshot-class", classId, snapshotId });
     if (!response.ok) throw new Error(response.error || "Failed to get class details");
-    console.log(formatMemSnapshotClass(response.data as Parameters<typeof formatMemSnapshotClass>[0]));
+    console.log(formatMemSnapshotClass(response.data as Parameters<typeof formatMemSnapshotClass>[0], verbose));
     return;
   }
 
@@ -418,7 +421,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "mem-snapshot-instances", classId, snapshotId, limit, offset, sortBy });
     if (!response.ok) throw new Error(response.error || "Failed to get instances");
-    console.log(formatMemSnapshotInstances(response.data as Parameters<typeof formatMemSnapshotInstances>[0]));
+    console.log(formatMemSnapshotInstances(response.data as Parameters<typeof formatMemSnapshotInstances>[0], verbose));
     return;
   }
 
@@ -429,7 +432,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "mem-snapshot-instance", nodeId: rawNodeId, snapshotId });
     if (!response.ok) throw new Error(response.error || "Failed to get instance");
-    console.log(formatMemSnapshotInstance(response.data as Parameters<typeof formatMemSnapshotInstance>[0]));
+    console.log(formatMemSnapshotInstance(response.data as Parameters<typeof formatMemSnapshotInstance>[0], verbose));
     return;
   }
 
@@ -442,7 +445,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "mem-snapshot-retainers", nodeId: rawNodeId, snapshotId, depth, limit });
     if (!response.ok) throw new Error(response.error || "Failed to get retainers");
-    console.log(formatMemSnapshotRetainers(response.data as Parameters<typeof formatMemSnapshotRetainers>[0]));
+    console.log(formatMemSnapshotRetainers(response.data as Parameters<typeof formatMemSnapshotRetainers>[0], verbose));
     return;
   }
 
@@ -457,7 +460,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "mem-snapshot-diff", baseSnapshotId, compareSnapshotId, sortBy, limit });
     if (!response.ok) throw new Error(response.error || "Failed to diff snapshots");
-    console.log(formatMemSnapshotDiff(response.data as Parameters<typeof formatMemSnapshotDiff>[0]));
+    console.log(formatMemSnapshotDiff(response.data as Parameters<typeof formatMemSnapshotDiff>[0], verbose));
     return;
   }
 
@@ -478,7 +481,7 @@ async function main(): Promise<void> {
       limit,
     });
     if (!response.ok) throw new Error(response.error || "Failed to analyze leak triplet");
-    console.log(formatMemLeakTriplet(response.data as Parameters<typeof formatMemLeakTriplet>[0]));
+    console.log(formatMemLeakTriplet(response.data as Parameters<typeof formatMemLeakTriplet>[0], verbose));
     return;
   }
 
@@ -488,7 +491,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "mem-snapshot-leak-candidates", snapshotId, limit });
     if (!response.ok) throw new Error(response.error || "Failed to get leak candidates");
-    console.log(formatMemLeakCandidates(response.data as Parameters<typeof formatMemLeakCandidates>[0]));
+    console.log(formatMemLeakCandidates(response.data as Parameters<typeof formatMemLeakCandidates>[0], verbose));
     return;
   }
 
@@ -498,7 +501,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "js-memory-sample", label, collectGarbage });
     if (!response.ok) throw new Error(response.error || "Failed to capture heap usage sample");
-    console.log(formatJsMemorySample(response.data as Parameters<typeof formatJsMemorySample>[0]));
+    console.log(formatJsMemorySample(response.data as Parameters<typeof formatJsMemorySample>[0], verbose));
     return;
   }
 
@@ -508,7 +511,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "js-memory-list", limit, offset });
     if (!response.ok) throw new Error(response.error || "Failed to list JS memory samples");
-    console.log(formatJsMemoryList(response.data as Parameters<typeof formatJsMemoryList>[0]));
+    console.log(formatJsMemoryList(response.data as Parameters<typeof formatJsMemoryList>[0], verbose));
     return;
   }
 
@@ -516,7 +519,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "js-memory-summary" });
     if (!response.ok) throw new Error(response.error || "Failed to get JS memory summary");
-    console.log(formatJsMemorySummary(response.data as Parameters<typeof formatJsMemorySummary>[0]));
+    console.log(formatJsMemorySummary(response.data as Parameters<typeof formatJsMemorySummary>[0], verbose));
     return;
   }
 
@@ -529,7 +532,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "js-memory-diff", baseSampleId, compareSampleId });
     if (!response.ok) throw new Error(response.error || "Failed to diff JS memory samples");
-    console.log(formatJsMemoryDiff(response.data as Parameters<typeof formatJsMemoryDiff>[0]));
+    console.log(formatJsMemoryDiff(response.data as Parameters<typeof formatJsMemoryDiff>[0], verbose));
     return;
   }
 
@@ -538,7 +541,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "js-memory-trend", limit });
     if (!response.ok) throw new Error(response.error || "Failed to get JS memory trend");
-    console.log(formatJsMemoryTrend(response.data as Parameters<typeof formatJsMemoryTrend>[0]));
+    console.log(formatJsMemoryTrend(response.data as Parameters<typeof formatJsMemoryTrend>[0], verbose));
     return;
   }
 
@@ -546,7 +549,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "js-memory-leak-signal" });
     if (!response.ok) throw new Error(response.error || "Failed to get JS memory leak signal");
-    console.log(formatJsMemoryLeakSignal(response.data as Parameters<typeof formatJsMemoryLeakSignal>[0]));
+    console.log(formatJsMemoryLeakSignal(response.data as Parameters<typeof formatJsMemoryLeakSignal>[0], verbose));
     return;
   }
 
@@ -573,7 +576,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "js-profile-status" });
     if (!response.ok) throw new Error(response.error || "Failed to get JS profile status");
-    console.log(formatJsProfileStatus(response.data as Parameters<typeof formatJsProfileStatus>[0]));
+    console.log(formatJsProfileStatus(response.data as Parameters<typeof formatJsProfileStatus>[0], verbose));
     return;
   }
 
@@ -583,7 +586,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "js-profile-list-sessions", limit, offset });
     if (!response.ok) throw new Error(response.error || "Failed to list JS profile sessions");
-    console.log(formatJsSessionList(response.data as Parameters<typeof formatJsSessionList>[0]));
+    console.log(formatJsSessionList(response.data as Parameters<typeof formatJsSessionList>[0], verbose));
     return;
   }
 
@@ -592,7 +595,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "js-profile-summary", sessionId });
     if (!response.ok) throw new Error(response.error || "Failed to get JS profile summary");
-    console.log(formatJsProfileSummary(response.data as Parameters<typeof formatJsProfileSummary>[0]));
+    console.log(formatJsProfileSummary(response.data as Parameters<typeof formatJsProfileSummary>[0], verbose));
     return;
   }
 
@@ -606,7 +609,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "js-profile-hotspots", sessionId, limit, offset, sortBy, minSelfMs, includeRuntime });
     if (!response.ok) throw new Error(response.error || "Failed to get JS profile hotspots");
-    console.log(formatJsHotspots(response.data as Parameters<typeof formatJsHotspots>[0]));
+    console.log(formatJsHotspots(response.data as Parameters<typeof formatJsHotspots>[0], verbose));
     return;
   }
 
@@ -618,7 +621,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "js-profile-hotspot", hotspotId, sessionId, stackLimit });
     if (!response.ok) throw new Error(response.error || "Failed to get JS profile hotspot");
-    console.log(formatJsHotspotDetail(response.data as Parameters<typeof formatJsHotspotDetail>[0]));
+    console.log(formatJsHotspotDetail(response.data as Parameters<typeof formatJsHotspotDetail>[0], verbose));
     return;
   }
 
@@ -630,7 +633,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "js-profile-modules", sessionId, limit, offset, sortBy });
     if (!response.ok) throw new Error(response.error || "Failed to get JS profile modules");
-    console.log(formatJsModules(response.data as Parameters<typeof formatJsModules>[0]));
+    console.log(formatJsModules(response.data as Parameters<typeof formatJsModules>[0], verbose));
     return;
   }
 
@@ -643,7 +646,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "js-profile-stacks", sessionId, limit, offset, minMs, maxDepth });
     if (!response.ok) throw new Error(response.error || "Failed to get JS profile stacks");
-    console.log(formatJsStacks(response.data as Parameters<typeof formatJsStacks>[0]));
+    console.log(formatJsStacks(response.data as Parameters<typeof formatJsStacks>[0], verbose));
     return;
   }
 
@@ -658,7 +661,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "js-profile-slice", startMs, endMs, sessionId, limit });
     if (!response.ok) throw new Error(response.error || "Failed to get JS profile slice");
-    console.log(formatJsSlice(response.data as Parameters<typeof formatJsSlice>[0]));
+    console.log(formatJsSlice(response.data as Parameters<typeof formatJsSlice>[0], verbose));
     return;
   }
 
@@ -674,7 +677,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "js-profile-diff", baseSessionId, compareSessionId, limit, minDeltaPct });
     if (!response.ok) throw new Error(response.error || "Failed to diff JS profile sessions");
-    console.log(formatJsDiff(response.data as Parameters<typeof formatJsDiff>[0]));
+    console.log(formatJsDiff(response.data as Parameters<typeof formatJsDiff>[0], verbose));
     return;
   }
 
@@ -692,7 +695,7 @@ async function main(): Promise<void> {
     await ensureDaemon();
     const response = await sendCommand({ type: "js-profile-source-maps", sessionId });
     if (!response.ok) throw new Error(response.error || "Failed to get source map info");
-    console.log(formatJsSourceMaps(response.data as Parameters<typeof formatJsSourceMaps>[0]));
+    console.log(formatJsSourceMaps(response.data as Parameters<typeof formatJsSourceMaps>[0], verbose));
     return;
   }
 
