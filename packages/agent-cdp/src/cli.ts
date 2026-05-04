@@ -8,6 +8,26 @@ import {
   formatTraceSummary,
 } from "./formatters.js";
 import {
+  formatMemLeakCandidates,
+  formatMemLeakTriplet,
+  formatMemSnapshotClass,
+  formatMemSnapshotClasses,
+  formatMemSnapshotDiff,
+  formatMemSnapshotInstance,
+  formatMemSnapshotInstances,
+  formatMemSnapshotList,
+  formatMemSnapshotRetainers,
+  formatMemSnapshotSummary,
+} from "./heap-snapshot/formatters.js";
+import {
+  formatJsMemoryDiff,
+  formatJsMemoryLeakSignal,
+  formatJsMemoryList,
+  formatJsMemorySample,
+  formatJsMemorySummary,
+  formatJsMemoryTrend,
+} from "./js-memory/formatters.js";
+import {
   formatJsDiff,
   formatJsHotspotDetail,
   formatJsHotspots,
@@ -49,8 +69,30 @@ Trace:
   trace start
   trace stop [--file PATH]
 
-Memory:
+Memory (raw capture):
   memory capture --file PATH
+
+Heap Snapshot Analyzer:
+  mem-snapshot capture [--name NAME] [--gc] [--file PATH]
+  mem-snapshot load --file PATH [--name NAME]
+  mem-snapshot list
+  mem-snapshot summary [--snapshot ID]
+  mem-snapshot classes [--snapshot ID] [--limit N] [--offset N] [--sort retained|self|count] [--filter TEXT]
+  mem-snapshot class --id CLASS_ID [--snapshot ID]
+  mem-snapshot instances --class CLASS_ID [--snapshot ID] [--limit N] [--offset N] [--sort retained|self]
+  mem-snapshot instance --id NODE_ID [--snapshot ID]
+  mem-snapshot retainers --id NODE_ID [--snapshot ID] [--depth N] [--limit N]
+  mem-snapshot diff --base SNAPSHOT_ID --compare SNAPSHOT_ID [--sort retained|self|count] [--limit N]
+  mem-snapshot leak-triplet --baseline ID --action ID --cleanup ID [--limit N]
+  mem-snapshot leak-candidates [--snapshot ID] [--limit N]
+
+JS Heap Usage Monitor:
+  js-memory sample [--label LABEL] [--gc]
+  js-memory list [--limit N] [--offset N]
+  js-memory summary
+  js-memory diff --base SAMPLE_ID --compare SAMPLE_ID
+  js-memory trend [--limit N]
+  js-memory leak-signal
 
 JS Profiler:
   js-profile start [--name NAME] [--interval US]
@@ -268,6 +310,211 @@ async function main(): Promise<void> {
       throw new Error(response.error || "Failed to capture heap snapshot");
     }
     console.log(formatMemorySummary(readMemorySummary(response.data)));
+    return;
+  }
+
+  if (cmd === "mem-snapshot" && command[1] === "capture") {
+    const name = typeof flags.name === "string" ? flags.name : undefined;
+    const collectGarbage = flags.gc === true;
+    const filePath = typeof flags.file === "string" ? flags.file : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "mem-snapshot-capture", name, collectGarbage, filePath });
+    if (!response.ok) throw new Error(response.error || "Failed to capture heap snapshot");
+    console.log(JSON.stringify(response.data, null, 2));
+    return;
+  }
+
+  if (cmd === "mem-snapshot" && command[1] === "load") {
+    const filePath = typeof flags.file === "string" ? flags.file : undefined;
+    if (!filePath) throw new Error("Usage: agent-cdp mem-snapshot load --file PATH");
+    const name = typeof flags.name === "string" ? flags.name : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "mem-snapshot-load", filePath, name });
+    if (!response.ok) throw new Error(response.error || "Failed to load heap snapshot");
+    console.log(JSON.stringify(response.data, null, 2));
+    return;
+  }
+
+  if (cmd === "mem-snapshot" && command[1] === "list") {
+    await ensureDaemon();
+    const response = await sendCommand({ type: "mem-snapshot-list" });
+    if (!response.ok) throw new Error(response.error || "Failed to list heap snapshots");
+    console.log(formatMemSnapshotList(response.data as Parameters<typeof formatMemSnapshotList>[0]));
+    return;
+  }
+
+  if (cmd === "mem-snapshot" && command[1] === "summary") {
+    const snapshotId = typeof flags.snapshot === "string" ? flags.snapshot : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "mem-snapshot-summary", snapshotId });
+    if (!response.ok) throw new Error(response.error || "Failed to get snapshot summary");
+    console.log(formatMemSnapshotSummary(response.data as Parameters<typeof formatMemSnapshotSummary>[0]));
+    return;
+  }
+
+  if (cmd === "mem-snapshot" && command[1] === "classes") {
+    const snapshotId = typeof flags.snapshot === "string" ? flags.snapshot : undefined;
+    const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
+    const offset = typeof flags.offset === "string" ? Number.parseInt(flags.offset, 10) : undefined;
+    const sortBy = typeof flags.sort === "string" ? flags.sort : undefined;
+    const filter = typeof flags.filter === "string" ? flags.filter : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "mem-snapshot-classes", snapshotId, sortBy, limit, offset, filter });
+    if (!response.ok) throw new Error(response.error || "Failed to get snapshot classes");
+    console.log(formatMemSnapshotClasses(response.data as Parameters<typeof formatMemSnapshotClasses>[0]));
+    return;
+  }
+
+  if (cmd === "mem-snapshot" && command[1] === "class") {
+    const classId = typeof flags.id === "string" ? flags.id : undefined;
+    if (!classId) throw new Error("Usage: agent-cdp mem-snapshot class --id CLASS_ID");
+    const snapshotId = typeof flags.snapshot === "string" ? flags.snapshot : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "mem-snapshot-class", classId, snapshotId });
+    if (!response.ok) throw new Error(response.error || "Failed to get class details");
+    console.log(formatMemSnapshotClass(response.data as Parameters<typeof formatMemSnapshotClass>[0]));
+    return;
+  }
+
+  if (cmd === "mem-snapshot" && command[1] === "instances") {
+    const classId = typeof flags.class === "string" ? flags.class : undefined;
+    if (!classId) throw new Error("Usage: agent-cdp mem-snapshot instances --class CLASS_ID");
+    const snapshotId = typeof flags.snapshot === "string" ? flags.snapshot : undefined;
+    const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
+    const offset = typeof flags.offset === "string" ? Number.parseInt(flags.offset, 10) : undefined;
+    const sortBy = typeof flags.sort === "string" ? flags.sort : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "mem-snapshot-instances", classId, snapshotId, limit, offset, sortBy });
+    if (!response.ok) throw new Error(response.error || "Failed to get instances");
+    console.log(formatMemSnapshotInstances(response.data as Parameters<typeof formatMemSnapshotInstances>[0]));
+    return;
+  }
+
+  if (cmd === "mem-snapshot" && command[1] === "instance") {
+    const rawNodeId = typeof flags.id === "string" ? Number.parseInt(flags.id, 10) : Number.NaN;
+    if (Number.isNaN(rawNodeId)) throw new Error("Usage: agent-cdp mem-snapshot instance --id NODE_ID");
+    const snapshotId = typeof flags.snapshot === "string" ? flags.snapshot : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "mem-snapshot-instance", nodeId: rawNodeId, snapshotId });
+    if (!response.ok) throw new Error(response.error || "Failed to get instance");
+    console.log(formatMemSnapshotInstance(response.data as Parameters<typeof formatMemSnapshotInstance>[0]));
+    return;
+  }
+
+  if (cmd === "mem-snapshot" && command[1] === "retainers") {
+    const rawNodeId = typeof flags.id === "string" ? Number.parseInt(flags.id, 10) : Number.NaN;
+    if (Number.isNaN(rawNodeId)) throw new Error("Usage: agent-cdp mem-snapshot retainers --id NODE_ID");
+    const snapshotId = typeof flags.snapshot === "string" ? flags.snapshot : undefined;
+    const depth = typeof flags.depth === "string" ? Number.parseInt(flags.depth, 10) : undefined;
+    const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "mem-snapshot-retainers", nodeId: rawNodeId, snapshotId, depth, limit });
+    if (!response.ok) throw new Error(response.error || "Failed to get retainers");
+    console.log(formatMemSnapshotRetainers(response.data as Parameters<typeof formatMemSnapshotRetainers>[0]));
+    return;
+  }
+
+  if (cmd === "mem-snapshot" && command[1] === "diff") {
+    const baseSnapshotId = typeof flags.base === "string" ? flags.base : undefined;
+    const compareSnapshotId = typeof flags.compare === "string" ? flags.compare : undefined;
+    if (!baseSnapshotId || !compareSnapshotId) {
+      throw new Error("Usage: agent-cdp mem-snapshot diff --base SNAPSHOT_ID --compare SNAPSHOT_ID");
+    }
+    const sortBy = typeof flags.sort === "string" ? flags.sort : undefined;
+    const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "mem-snapshot-diff", baseSnapshotId, compareSnapshotId, sortBy, limit });
+    if (!response.ok) throw new Error(response.error || "Failed to diff snapshots");
+    console.log(formatMemSnapshotDiff(response.data as Parameters<typeof formatMemSnapshotDiff>[0]));
+    return;
+  }
+
+  if (cmd === "mem-snapshot" && command[1] === "leak-triplet") {
+    const baselineSnapshotId = typeof flags.baseline === "string" ? flags.baseline : undefined;
+    const actionSnapshotId = typeof flags.action === "string" ? flags.action : undefined;
+    const cleanupSnapshotId = typeof flags.cleanup === "string" ? flags.cleanup : undefined;
+    if (!baselineSnapshotId || !actionSnapshotId || !cleanupSnapshotId) {
+      throw new Error("Usage: agent-cdp mem-snapshot leak-triplet --baseline ID --action ID --cleanup ID");
+    }
+    const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({
+      type: "mem-snapshot-leak-triplet",
+      baselineSnapshotId,
+      actionSnapshotId,
+      cleanupSnapshotId,
+      limit,
+    });
+    if (!response.ok) throw new Error(response.error || "Failed to analyze leak triplet");
+    console.log(formatMemLeakTriplet(response.data as Parameters<typeof formatMemLeakTriplet>[0]));
+    return;
+  }
+
+  if (cmd === "mem-snapshot" && command[1] === "leak-candidates") {
+    const snapshotId = typeof flags.snapshot === "string" ? flags.snapshot : undefined;
+    const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "mem-snapshot-leak-candidates", snapshotId, limit });
+    if (!response.ok) throw new Error(response.error || "Failed to get leak candidates");
+    console.log(formatMemLeakCandidates(response.data as Parameters<typeof formatMemLeakCandidates>[0]));
+    return;
+  }
+
+  if (cmd === "js-memory" && command[1] === "sample") {
+    const label = typeof flags.label === "string" ? flags.label : undefined;
+    const collectGarbage = flags.gc === true;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-memory-sample", label, collectGarbage });
+    if (!response.ok) throw new Error(response.error || "Failed to capture heap usage sample");
+    console.log(formatJsMemorySample(response.data as Parameters<typeof formatJsMemorySample>[0]));
+    return;
+  }
+
+  if (cmd === "js-memory" && command[1] === "list") {
+    const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
+    const offset = typeof flags.offset === "string" ? Number.parseInt(flags.offset, 10) : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-memory-list", limit, offset });
+    if (!response.ok) throw new Error(response.error || "Failed to list JS memory samples");
+    console.log(formatJsMemoryList(response.data as Parameters<typeof formatJsMemoryList>[0]));
+    return;
+  }
+
+  if (cmd === "js-memory" && command[1] === "summary") {
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-memory-summary" });
+    if (!response.ok) throw new Error(response.error || "Failed to get JS memory summary");
+    console.log(formatJsMemorySummary(response.data as Parameters<typeof formatJsMemorySummary>[0]));
+    return;
+  }
+
+  if (cmd === "js-memory" && command[1] === "diff") {
+    const baseSampleId = typeof flags.base === "string" ? flags.base : undefined;
+    const compareSampleId = typeof flags.compare === "string" ? flags.compare : undefined;
+    if (!baseSampleId || !compareSampleId) {
+      throw new Error("Usage: agent-cdp js-memory diff --base SAMPLE_ID --compare SAMPLE_ID");
+    }
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-memory-diff", baseSampleId, compareSampleId });
+    if (!response.ok) throw new Error(response.error || "Failed to diff JS memory samples");
+    console.log(formatJsMemoryDiff(response.data as Parameters<typeof formatJsMemoryDiff>[0]));
+    return;
+  }
+
+  if (cmd === "js-memory" && command[1] === "trend") {
+    const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-memory-trend", limit });
+    if (!response.ok) throw new Error(response.error || "Failed to get JS memory trend");
+    console.log(formatJsMemoryTrend(response.data as Parameters<typeof formatJsMemoryTrend>[0]));
+    return;
+  }
+
+  if (cmd === "js-memory" && command[1] === "leak-signal") {
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-memory-leak-signal" });
+    if (!response.ok) throw new Error(response.error || "Failed to get JS memory leak signal");
+    console.log(formatJsMemoryLeakSignal(response.data as Parameters<typeof formatJsMemoryLeakSignal>[0]));
     return;
   }
 
