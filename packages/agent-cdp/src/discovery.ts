@@ -25,8 +25,8 @@ export function normalizeBaseUrl(url: string): string {
   return url.endsWith("/") ? url.slice(0, -1) : url;
 }
 
-export function buildTargetId(kind: TargetDescriptor["kind"], sourceUrl: string, rawId: string): string {
-  return `${kind}:${encodeURIComponent(normalizeBaseUrl(sourceUrl))}:${rawId}`;
+export function buildTargetId(kind: TargetDescriptor["kind"], rawId: string): string {
+  return `${kind}:${rawId}`;
 }
 
 export function getDiscoveryUrl(options: DiscoveryOptions): string | null {
@@ -39,7 +39,7 @@ export function mapChromeTarget(sourceUrl: string, target: ChromeJsonTarget): Ta
   }
 
   return {
-    id: buildTargetId("chrome", sourceUrl, target.id),
+    id: buildTargetId("chrome", target.id),
     rawId: target.id,
     title: target.title || target.id,
     kind: "chrome",
@@ -56,7 +56,7 @@ export function mapReactNativeTarget(sourceUrl: string, target: ReactNativeJsonT
   }
 
   return {
-    id: buildTargetId("react-native", sourceUrl, target.id),
+    id: buildTargetId("react-native", target.id),
     rawId: target.id,
     title: target.title || target.id,
     kind: "react-native",
