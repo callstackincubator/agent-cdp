@@ -11,6 +11,6 @@ describe("formatStatus", () => {
         selectedTarget: null,
         tracingActive: false,
       }),
-    ).toContain("Providers: 2");
+    ).toContain("session:disconnected");
   });
 });
