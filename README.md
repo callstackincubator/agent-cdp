@@ -1,103 +1,91 @@
 # agent-cdp
 
-`agent-cdp` is a lightweight CLI for talking to Chrome DevTools Protocol targets from the command line.
+**agent-cdp** is a command-line tool that connects to apps and pages through the **Chrome DevTools Protocol (CDP)**. Use it to list debuggable targets, stream console output, record traces, inspect JavaScript heap usage, capture and analyze heap snapshots, and run JavaScript CPU profiles—all without opening DevTools yourself.
 
-It is built for agent-friendly workflows and currently supports:
+## Compatibility
 
-- persistent daemon-backed connections
-- Chrome target discovery via `/json/list`
-- React Native target discovery via `dev-middleware` `/json/list`
-- console collection
-- raw trace recording
-- heap snapshot capture
+| Environment | Notes |
+|-------------|--------|
+| **Chrome / Chromium** | Requires a CDP debug endpoint, typically with remote debugging enabled (for example port `9222`). You point the CLI at the `/json/list` URL for that endpoint. |
+| **React Native** | Works with the Metro / dev tooling that exposes a CDP-compatible target list (often `http://127.0.0.1:8081` during development). Same flow as Chrome: `target list` with the dev server URL. |
+| **Node.js** | Supports attaching to Node processes started with **`--inspect`** or **`--inspect-brk`** (or the equivalent `NODE_OPTIONS`). They expose the same CDP discovery model as Chrome; point `target list` at the inspector base URL (often `http://127.0.0.1:9229` for the default port, or your `--inspect=host:port` value). |
+
+Anything that exposes the same style of CDP HTTP discovery (`/json/list`) and WebSocket debugging should work; behavior depends on what the target implements.
 
 ## Install
 
-```sh
-pnpm install
-pnpm run build
-```
-
-Run the built CLI with:
+Install the CLI globally with **npm**:
 
 ```sh
-pnpm run agent-cdp -- <command>
+npm install -g agent-cdp
 ```
 
-## Quick Start
-
-Start the daemon:
+Run it as:
 
 ```sh
-pnpm run agent-cdp -- start
-pnpm run agent-cdp -- status
+agent-cdp <command> [options]
 ```
 
-List available targets:
+For the full command tree and flags:
 
 ```sh
-pnpm run agent-cdp -- target list --url http://127.0.0.1:9222
-pnpm run agent-cdp -- target list --url http://127.0.0.1:8081
+agent-cdp --help
 ```
 
-Select a target:
+**Developing from source:** clone the repository, run `pnpm install` and `pnpm run build`, then from the repo root use `pnpm run agent-cdp -- <command> [options]` (or run `node packages/agent-cdp/dist/cli.js` directly).
+
+## Quick start
+
+**1. Start the background connection helper (daemon)**
 
 ```sh
-pnpm run agent-cdp -- target select <target-id> --url http://127.0.0.1:9222
+agent-cdp start
+agent-cdp status
 ```
 
-Read console messages:
+**2. List targets and select one**
+
+Chrome (example port):
 
 ```sh
-pnpm run agent-cdp -- console list
-pnpm run agent-cdp -- console get 1
+agent-cdp target list --url http://127.0.0.1:9222
+agent-cdp target select <target-id> --url http://127.0.0.1:9222
 ```
 
-Record a trace:
+React Native (example Metro URL):
 
 ```sh
-pnpm run agent-cdp -- trace start
-pnpm run agent-cdp -- trace stop --file ./trace.json
+agent-cdp target list --url http://127.0.0.1:8081
 ```
 
-Capture a heap snapshot:
+Node.js (example default inspect port after starting your app with `node --inspect …`):
 
 ```sh
-pnpm run agent-cdp -- memory capture --file ./snapshot.heapsnapshot
+agent-cdp target list --url http://127.0.0.1:9229
+agent-cdp target select <target-id> --url http://127.0.0.1:9229
 ```
 
-Stop the daemon:
+Clear the current selection when needed:
 
 ```sh
-pnpm run agent-cdp -- stop
+agent-cdp target clear
 ```
 
-## Commands
+**3. Use the features you need**
 
-```text
-Daemon:
-  start
-  stop
-  status
+- **Console** — list and fetch log lines: `console list`, `console get <id>`
+- **Trace** — `trace start` / `trace stop [--file PATH]` for raw trace capture
+- **Memory (raw)** — `memory capture --file PATH` for a heap snapshot file
+- **Heap snapshot tools** — `mem-snapshot` commands to capture, load, summarize, diff snapshots, inspect classes/instances/retainers, and triage leak-style comparisons
+- **JS heap monitor** — `js-memory` commands for sampling, summaries, diffs, trends, and leak-oriented signals
+- **JS profiler** — `js-profile` commands to record CPU profiles, list sessions, hotspots, stacks, diffs, and optional source map help
 
-Targets:
-  target list --url URL
-  target select <id> --url URL
-  target clear
+**4. Stop the daemon**
 
-Console:
-  console list [--limit N]
-  console get <id>
-
-Trace:
-  trace start
-  trace stop [--file PATH]
-
-Memory:
-  memory capture --file PATH
+```sh
+agent-cdp stop
 ```
 
-## Notes
+## Command overview
 
-- Discovery expects a CDP-compatible `/json/list` endpoint, for example Chrome on `http://127.0.0.1:9222` or React Native dev middleware on `http://127.0.0.1:8081`.
-- Trace reporting and heap snapshot analysis are not implemented yet; current support is raw capture only.
+Commands are grouped as **daemon**, **target**, **console**, **trace**, **memory**, **mem-snapshot**, **js-memory**, **js-profile**, and **skills** (bundled reference files). See `agent-cdp --help` for exact syntax and options.
