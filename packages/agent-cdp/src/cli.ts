@@ -185,7 +185,7 @@ function discoveryOptionsFromFlags(flags: Record<string, string | boolean>): Dis
   };
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   const { command, flags } = parseArgs(process.argv.slice(2));
   const cmd = command[0];
   const verbose = flags.verbose === true;
@@ -703,9 +703,3 @@ async function main(): Promise<void> {
   process.exit(1);
 }
 
-if (process.argv[1] && import.meta.url === new URL(process.argv[1], "file://").href) {
-  void main().catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  });
-}

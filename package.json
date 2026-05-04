@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "agent-cdp": "node packages/agent-cdp/dist/cli.js",
+    "agent-cdp": "node packages/agent-cdp/dist/bin.js",
     "build": "pnpm --filter agent-cdp build",
     "lint": "pnpm --filter agent-cdp lint",
     "format": "pnpm --filter agent-cdp format",

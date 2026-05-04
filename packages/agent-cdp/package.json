@@ -1,6 +1,6 @@
 {
   "name": "agent-cdp",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Command-line tool for the Chrome DevTools Protocol (CDP): debug targets, console, traces, heap snapshots, and JavaScript CPU profiling for Chrome, Node.js, and React Native.",
   "type": "module",
   "repository": {
@@ -13,7 +13,7 @@
   "homepage": "https://github.com/callstackincubator/agent-cdp#readme",
   "license": "MIT",
   "bin": {
-    "agent-cdp": "./dist/cli.js"
+    "agent-cdp": "./dist/bin.js"
   },
   "exports": {
     ".": "./dist/index.js"
