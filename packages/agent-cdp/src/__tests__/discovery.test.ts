@@ -2,9 +2,7 @@ import { buildTargetId, getDiscoveryUrl, mapChromeTarget, mapReactNativeTarget }
 
 describe("discovery helpers", () => {
   it("builds deterministic target ids", () => {
-    expect(buildTargetId("chrome", "http://127.0.0.1:9222/", "page-1")).toBe(
-      "chrome:http%3A%2F%2F127.0.0.1%3A9222:page-1",
-    );
+    expect(buildTargetId("chrome", "page-1")).toBe("chrome:page-1");
   });
 
   it("maps the configured discovery url", () => {
