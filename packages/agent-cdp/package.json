@@ -23,6 +23,7 @@
     "README.md"
   ],
   "scripts": {
+    "prepublishOnly": "pnpm run build",
     "build": "tsup",
     "format": "oxfmt --write \"src/**/*.ts\" package.json tsconfig.json tsup.config.ts vitest.config.ts",
     "format:check": "oxfmt --check \"src/**/*.ts\" package.json tsconfig.json tsup.config.ts vitest.config.ts",
