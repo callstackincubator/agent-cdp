@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 import { ensureDaemon, readDaemonInfo, sendCommand, stopDaemon } from "./daemon-client.js";
 import {
   formatConsoleList,
@@ -50,6 +53,10 @@ import type {
 
 export function usage(): string {
   return `Usage: agent-cdp <command>
+
+If you are an LLM agent, run 'agent-cdp skills get core' before using this
+tool. The skill file contains workflows, flag reference, and troubleshooting
+guidance optimized for automated use.
 
 Daemon:
   start     Start daemon
@@ -107,7 +114,11 @@ JS Profiler:
   js-profile slice --start MS --end MS [--session ID] [--limit N]
   js-profile diff --base SESSION_ID --compare SESSION_ID [--limit N] [--min-delta-pct N]
   js-profile export [--session ID]
-  js-profile source-maps [--session ID]`;
+  js-profile source-maps [--session ID]
+
+Skills:
+  skills list             List available skill files
+  skills get <name>       Print a skill file (e.g. 'skills get core')`;
 }
 
 export function parseArgs(argv: string[]): {
@@ -179,6 +190,27 @@ async function main(): Promise<void> {
   if (!cmd || cmd === "help") {
     console.log(usage());
     return;
+  }
+
+  if (cmd === "skills") {
+    const skillsDir = join(dirname(fileURLToPath(import.meta.url)), "..", "skills");
+    const sub = command[1];
+    if (!sub || sub === "list") {
+      const files = readdirSync(skillsDir).filter((f) => f.endsWith(".md"));
+      const names = files.map((f) => f.replace(/\.md$/, ""));
+      console.log(names.join("\n"));
+      return;
+    }
+    if (sub === "get") {
+      const name = command[2];
+      if (!name) {
+        throw new Error("Usage: agent-cdp skills get <name>");
+      }
+      const filePath = join(skillsDir, `${name}.md`);
+      console.log(readFileSync(filePath, "utf8"));
+      return;
+    }
+    throw new Error(`Unknown skills subcommand: ${sub}`);
   }
 
   if (cmd === "start") {
