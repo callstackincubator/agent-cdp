@@ -109,7 +109,27 @@ export type IpcCommand =
   | { type: "js-profile-slice"; sessionId?: string; startMs: number; endMs: number; limit?: number }
   | { type: "js-profile-diff"; baseSessionId: string; compareSessionId: string; limit?: number; minDeltaPct?: number }
   | { type: "js-profile-export"; sessionId?: string }
-  | { type: "js-profile-source-maps"; sessionId?: string };
+  | { type: "js-profile-source-maps"; sessionId?: string }
+  // Heap snapshot analysis
+  | { type: "mem-snapshot-capture"; name?: string; collectGarbage?: boolean; filePath?: string }
+  | { type: "mem-snapshot-load"; filePath: string; name?: string }
+  | { type: "mem-snapshot-list" }
+  | { type: "mem-snapshot-summary"; snapshotId?: string }
+  | { type: "mem-snapshot-classes"; snapshotId?: string; sortBy?: string; limit?: number; offset?: number; filter?: string }
+  | { type: "mem-snapshot-class"; classId: string; snapshotId?: string }
+  | { type: "mem-snapshot-instances"; classId: string; snapshotId?: string; limit?: number; offset?: number; sortBy?: string }
+  | { type: "mem-snapshot-instance"; nodeId: number; snapshotId?: string }
+  | { type: "mem-snapshot-retainers"; nodeId: number; snapshotId?: string; depth?: number; limit?: number }
+  | { type: "mem-snapshot-diff"; baseSnapshotId: string; compareSnapshotId: string; sortBy?: string; limit?: number }
+  | { type: "mem-snapshot-leak-triplet"; baselineSnapshotId: string; actionSnapshotId: string; cleanupSnapshotId: string; limit?: number }
+  | { type: "mem-snapshot-leak-candidates"; snapshotId?: string; limit?: number }
+  // JS heap usage monitor
+  | { type: "js-memory-sample"; label?: string; collectGarbage?: boolean }
+  | { type: "js-memory-list"; limit?: number; offset?: number }
+  | { type: "js-memory-summary" }
+  | { type: "js-memory-diff"; baseSampleId: string; compareSampleId: string }
+  | { type: "js-memory-trend"; limit?: number }
+  | { type: "js-memory-leak-signal" };
 
 export interface IpcResponse {
   ok: boolean;

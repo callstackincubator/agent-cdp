@@ -3,6 +3,8 @@ import net from "node:net";
 import path from "node:path";
 
 import { ConsoleCollector } from "./console.js";
+import { HeapSnapshotManager } from "./heap-snapshot/index.js";
+import { JsHeapUsageMonitor } from "./js-memory/index.js";
 import { JsProfiler } from "./js-profiler/index.js";
 import { MemorySnapshotter } from "./memory.js";
 import { createTargetProviders } from "./providers.js";
@@ -39,6 +41,8 @@ class Daemon {
   private readonly startedAt = Date.now();
   private readonly consoleCollector = new ConsoleCollector();
   private readonly memorySnapshotter = new MemorySnapshotter();
+  private readonly heapSnapshotManager = new HeapSnapshotManager();
+  private readonly jsHeapUsageMonitor = new JsHeapUsageMonitor();
   private readonly providers = createTargetProviders();
   private readonly sessionManager = new SessionManager(this.providers);
   private readonly traceRecorder = new TraceRecorder();
@@ -281,6 +285,141 @@ class Daemon {
 
       if (command.type === "js-profile-source-maps") {
         return { ok: true, data: this.jsProfiler.getSourceMaps(command.sessionId) };
+      }
+
+      if (command.type === "mem-snapshot-capture") {
+        const session = await this.requireSession();
+        return {
+          ok: true,
+          data: await this.heapSnapshotManager.capture(session, {
+            name: command.name,
+            collectGarbage: command.collectGarbage,
+            filePath: command.filePath,
+          }),
+        };
+      }
+
+      if (command.type === "mem-snapshot-load") {
+        return { ok: true, data: await this.heapSnapshotManager.load(command.filePath, command.name) };
+      }
+
+      if (command.type === "mem-snapshot-list") {
+        return { ok: true, data: this.heapSnapshotManager.list() };
+      }
+
+      if (command.type === "mem-snapshot-summary") {
+        return { ok: true, data: this.heapSnapshotManager.getSummary(command.snapshotId) };
+      }
+
+      if (command.type === "mem-snapshot-classes") {
+        const sortBy =
+          command.sortBy === "selfSize" || command.sortBy === "count" ? command.sortBy : "retainedSize";
+        return {
+          ok: true,
+          data: this.heapSnapshotManager.getClasses(command.snapshotId, {
+            sortBy,
+            limit: command.limit,
+            offset: command.offset,
+            filter: command.filter,
+          }),
+        };
+      }
+
+      if (command.type === "mem-snapshot-class") {
+        return { ok: true, data: this.heapSnapshotManager.getClass(command.classId, command.snapshotId) };
+      }
+
+      if (command.type === "mem-snapshot-instances") {
+        const sortBy = command.sortBy === "selfSize" ? "selfSize" : "retainedSize";
+        return {
+          ok: true,
+          data: this.heapSnapshotManager.getInstances(command.classId, command.snapshotId, {
+            limit: command.limit,
+            offset: command.offset,
+            sortBy,
+          }),
+        };
+      }
+
+      if (command.type === "mem-snapshot-instance") {
+        return { ok: true, data: this.heapSnapshotManager.getInstance(command.nodeId, command.snapshotId) };
+      }
+
+      if (command.type === "mem-snapshot-retainers") {
+        return {
+          ok: true,
+          data: this.heapSnapshotManager.getRetainers(
+            command.nodeId,
+            command.snapshotId,
+            command.depth,
+            command.limit,
+          ),
+        };
+      }
+
+      if (command.type === "mem-snapshot-diff") {
+        const sortBy =
+          command.sortBy === "selfDelta" || command.sortBy === "countDelta" ? command.sortBy : "retainedDelta";
+        return {
+          ok: true,
+          data: this.heapSnapshotManager.getDiff(command.baseSnapshotId, command.compareSnapshotId, {
+            sortBy,
+            limit: command.limit,
+          }),
+        };
+      }
+
+      if (command.type === "mem-snapshot-leak-triplet") {
+        return {
+          ok: true,
+          data: this.heapSnapshotManager.getLeakTriplet(
+            command.baselineSnapshotId,
+            command.actionSnapshotId,
+            command.cleanupSnapshotId,
+            command.limit,
+          ),
+        };
+      }
+
+      if (command.type === "mem-snapshot-leak-candidates") {
+        return {
+          ok: true,
+          data: this.heapSnapshotManager.getLeakCandidates(command.snapshotId, command.limit),
+        };
+      }
+
+      if (command.type === "js-memory-sample") {
+        const session = await this.requireSession();
+        return {
+          ok: true,
+          data: await this.jsHeapUsageMonitor.sample(session, {
+            label: command.label,
+            collectGarbage: command.collectGarbage,
+          }),
+        };
+      }
+
+      if (command.type === "js-memory-list") {
+        return { ok: true, data: this.jsHeapUsageMonitor.list(command.limit, command.offset) };
+      }
+
+      if (command.type === "js-memory-summary") {
+        return { ok: true, data: this.jsHeapUsageMonitor.getSummary() };
+      }
+
+      if (command.type === "js-memory-diff") {
+        return {
+          ok: true,
+          data: this.jsHeapUsageMonitor.getDiff(command.baseSampleId, command.compareSampleId),
+        };
+      }
+
+      if (command.type === "js-memory-trend") {
+        return { ok: true, data: this.jsHeapUsageMonitor.getTrend(command.limit) };
+      }
+
+      if (command.type === "js-memory-leak-signal") {
+        return { ok: true, data: this.jsHeapUsageMonitor.getLeakSignal() };
       }
 
       const status: StatusInfo = {
