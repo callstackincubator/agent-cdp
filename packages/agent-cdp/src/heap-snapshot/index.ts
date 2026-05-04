@@ -84,12 +84,13 @@ export class HeapSnapshotManager {
       await fs.writeFile(path.resolve(opts.filePath), rawJson);
     }
 
-    return this.parseAndStore(raw, {
+    const analyzed = this.ingestRawSnapshot(raw, {
       name: opts.name ?? `snapshot-${Date.now()}`,
       filePath: opts.filePath ? path.resolve(opts.filePath) : "",
       capturedAt: Date.now(),
       collectGarbageRequested: opts.collectGarbage ?? false,
     });
+    return querySnapshotMeta(analyzed);
   }
 
   async load(filePath: string, name?: string): Promise<MemSnapshotMeta> {
@@ -97,23 +98,24 @@ export class HeapSnapshotManager {
     const rawJson = await fs.readFile(absPath, "utf8");
     const raw = JSON.parse(rawJson) as RawHeapSnapshotJson;
 
-    return this.parseAndStore(raw, {
+    const analyzed = this.ingestRawSnapshot(raw, {
       name: name ?? path.basename(filePath, ".heapsnapshot"),
       filePath: absPath,
       capturedAt: Date.now(),
       collectGarbageRequested: false,
     });
+    return querySnapshotMeta(analyzed);
   }
 
-  private parseAndStore(
+  ingestRawSnapshot(
     raw: RawHeapSnapshotJson,
     meta: { name: string; filePath: string; capturedAt: number; collectGarbageRequested: boolean },
-  ): MemSnapshotMeta {
+  ): AnalyzedSnapshot {
     const snapshotId = this.store.generateId();
     const parsed = parseHeapSnapshot(raw);
     const analyzed = analyzeSnapshot(parsed, { snapshotId, ...meta });
     this.store.add(analyzed);
-    return querySnapshotMeta(analyzed);
+    return analyzed;
   }
 
   list(): MemSnapshotMeta[] {

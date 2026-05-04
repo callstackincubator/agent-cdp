@@ -24,6 +24,24 @@ import {
   formatMemSnapshotSummary,
 } from "./heap-snapshot/formatters.js";
 import {
+  formatJsAllocationBucketed,
+  formatJsAllocationExport,
+  formatJsAllocationHotspots,
+  formatJsAllocationLeakSignal,
+  formatJsAllocationList,
+  formatJsAllocationStatus,
+  formatJsAllocationSummary,
+} from "./js-allocation/formatters.js";
+import {
+  formatJsAllocationTimelineBuckets,
+  formatJsAllocationTimelineExport,
+  formatJsAllocationTimelineHotspots,
+  formatJsAllocationTimelineLeakSignal,
+  formatJsAllocationTimelineList,
+  formatJsAllocationTimelineStatus,
+  formatJsAllocationTimelineSummary,
+} from "./js-allocation-timeline/formatters.js";
+import {
   formatJsMemoryDiff,
   formatJsMemoryLeakSignal,
   formatJsMemoryList,
@@ -103,6 +121,31 @@ JS Heap Usage Monitor:
   js-memory trend [--limit N]
   js-memory leak-signal
 
+JS Allocation Profiler:
+  js-allocation start [--name NAME] [--interval BYTES] [--stack-depth N] [--include-major-gc] [--include-minor-gc]
+  js-allocation stop
+  js-allocation status
+  js-allocation list [--limit N] [--offset N]
+  js-allocation summary [--session ID]
+  js-allocation hotspots [--session ID] [--limit N] [--offset N] [--sort bytes|samples]
+  js-allocation bucketed [--session ID] [--limit N]
+  js-allocation leak-signal [--session ID]
+  js-allocation export --file PATH [--session ID]
+  js-allocation source-maps [--session ID]
+
+JS Allocation Timeline:
+  js-allocation-timeline start [--name NAME]
+  js-allocation-timeline stop
+  js-allocation-timeline status
+  js-allocation-timeline list [--limit N] [--offset N]
+  js-allocation-timeline summary [--session ID]
+  js-allocation-timeline buckets [--session ID] [--limit N]
+  js-allocation-timeline hotspots [--session ID] [--limit N] [--offset N]
+  js-allocation-timeline leak-signal [--session ID]
+  js-allocation-timeline export --file PATH [--session ID]
+  js-allocation-timeline source-maps [--session ID]
+  After stop, use snapshot id with: mem-snapshot summary|classes|retainers --snapshot ms_N
+
 JS Profiler:
   js-profile start [--name NAME] [--interval US]
   js-profile stop
@@ -120,7 +163,10 @@ JS Profiler:
 
 Skills:
   skills list             List available skill files
-  skills get <name>       Print a skill file (e.g. 'skills get core')`;
+  skills get <name>       Print a skill file (e.g. 'skills get core')
+
+Global:
+  --verbose               Richer output (symbolicated paths, source-map stats, extra detail)`;
 }
 
 export function parseArgs(argv: string[]): {
@@ -553,6 +599,221 @@ export async function main(): Promise<void> {
     return;
   }
 
+  if (cmd === "js-allocation" && command[1] === "start") {
+    const name = typeof flags.name === "string" ? flags.name : undefined;
+    const samplingIntervalBytes = typeof flags.interval === "string" ? Number.parseInt(flags.interval, 10) : undefined;
+    const stackDepth = typeof flags["stack-depth"] === "string" ? Number.parseInt(flags["stack-depth"], 10) : undefined;
+    const includeObjectsCollectedByMajorGC = flags["include-major-gc"] === true;
+    const includeObjectsCollectedByMinorGC = flags["include-minor-gc"] === true;
+    await ensureDaemon();
+    const response = await sendCommand({
+      type: "js-allocation-start",
+      name,
+      samplingIntervalBytes,
+      stackDepth,
+      includeObjectsCollectedByMajorGC,
+      includeObjectsCollectedByMinorGC,
+    });
+    if (!response.ok) throw new Error(response.error || "Failed to start JS allocation session");
+    console.log("JS allocation session started");
+    return;
+  }
+
+  if (cmd === "js-allocation" && command[1] === "stop") {
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-allocation-stop" });
+    if (!response.ok) throw new Error(response.error || "Failed to stop JS allocation session");
+    console.log(`JS allocation session stopped. Session ID: ${response.data as string}`);
+    return;
+  }
+
+  if (cmd === "js-allocation" && command[1] === "status") {
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-allocation-status" });
+    if (!response.ok) throw new Error(response.error || "Failed to get JS allocation status");
+    console.log(formatJsAllocationStatus(response.data as Parameters<typeof formatJsAllocationStatus>[0], verbose));
+    return;
+  }
+
+  if (cmd === "js-allocation" && command[1] === "list") {
+    const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
+    const offset = typeof flags.offset === "string" ? Number.parseInt(flags.offset, 10) : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-allocation-list-sessions", limit, offset });
+    if (!response.ok) throw new Error(response.error || "Failed to list JS allocation sessions");
+    console.log(formatJsAllocationList(response.data as Parameters<typeof formatJsAllocationList>[0], verbose));
+    return;
+  }
+
+  if (cmd === "js-allocation" && command[1] === "summary") {
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-allocation-summary", sessionId });
+    if (!response.ok) throw new Error(response.error || "Failed to get JS allocation summary");
+    console.log(formatJsAllocationSummary(response.data as Parameters<typeof formatJsAllocationSummary>[0], verbose));
+    return;
+  }
+
+  if (cmd === "js-allocation" && command[1] === "hotspots") {
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
+    const offset = typeof flags.offset === "string" ? Number.parseInt(flags.offset, 10) : undefined;
+    const sortBy = typeof flags.sort === "string" ? flags.sort : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-allocation-hotspots", sessionId, limit, offset, sortBy });
+    if (!response.ok) throw new Error(response.error || "Failed to get JS allocation hotspots");
+    console.log(formatJsAllocationHotspots(response.data as Parameters<typeof formatJsAllocationHotspots>[0], verbose));
+    return;
+  }
+
+  if (cmd === "js-allocation" && command[1] === "bucketed") {
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-allocation-bucketed", sessionId, limit });
+    if (!response.ok) throw new Error(response.error || "Failed to get JS allocation buckets");
+    console.log(formatJsAllocationBucketed(response.data as Parameters<typeof formatJsAllocationBucketed>[0], verbose));
+    return;
+  }
+
+  if (cmd === "js-allocation" && command[1] === "leak-signal") {
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-allocation-leak-signal", sessionId });
+    if (!response.ok) throw new Error(response.error || "Failed to get JS allocation leak signal");
+    console.log(formatJsAllocationLeakSignal(response.data as Parameters<typeof formatJsAllocationLeakSignal>[0], verbose));
+    return;
+  }
+
+  if (cmd === "js-allocation" && command[1] === "export") {
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    const filePath = typeof flags.file === "string" ? flags.file : undefined;
+    if (!filePath) throw new Error("Usage: agent-cdp js-allocation export --file PATH [--session ID]");
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-allocation-export", sessionId, filePath });
+    if (!response.ok) throw new Error(response.error || "Failed to export JS allocation artifact");
+    console.log(formatJsAllocationExport(response.data as Parameters<typeof formatJsAllocationExport>[0], verbose));
+    return;
+  }
+
+  if (cmd === "js-allocation" && command[1] === "source-maps") {
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-allocation-source-maps", sessionId });
+    if (!response.ok) throw new Error(response.error || "Failed to get JS allocation source map info");
+    console.log(formatJsSourceMaps(response.data as Parameters<typeof formatJsSourceMaps>[0], verbose));
+    return;
+  }
+
+  if (cmd === "js-allocation-timeline" && command[1] === "start") {
+    const name = typeof flags.name === "string" ? flags.name : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-allocation-timeline-start", name });
+    if (!response.ok) throw new Error(response.error || "Failed to start JS allocation timeline session");
+    console.log("JS allocation timeline session started");
+    return;
+  }
+
+  if (cmd === "js-allocation-timeline" && command[1] === "stop") {
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-allocation-timeline-stop" });
+    if (!response.ok) throw new Error(response.error || "Failed to stop JS allocation timeline session");
+    console.log(`JS allocation timeline session stopped. Session ID: ${response.data as string}`);
+    return;
+  }
+
+  if (cmd === "js-allocation-timeline" && command[1] === "status") {
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-allocation-timeline-status" });
+    if (!response.ok) throw new Error(response.error || "Failed to get JS allocation timeline status");
+    console.log(
+      formatJsAllocationTimelineStatus(response.data as Parameters<typeof formatJsAllocationTimelineStatus>[0], verbose),
+    );
+    return;
+  }
+
+  if (cmd === "js-allocation-timeline" && command[1] === "list") {
+    const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
+    const offset = typeof flags.offset === "string" ? Number.parseInt(flags.offset, 10) : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-allocation-timeline-list-sessions", limit, offset });
+    if (!response.ok) throw new Error(response.error || "Failed to list JS allocation timeline sessions");
+    console.log(formatJsAllocationTimelineList(response.data as Parameters<typeof formatJsAllocationTimelineList>[0], verbose));
+    return;
+  }
+
+  if (cmd === "js-allocation-timeline" && command[1] === "summary") {
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-allocation-timeline-summary", sessionId });
+    if (!response.ok) throw new Error(response.error || "Failed to get JS allocation timeline summary");
+    console.log(
+      formatJsAllocationTimelineSummary(response.data as Parameters<typeof formatJsAllocationTimelineSummary>[0], verbose),
+    );
+    return;
+  }
+
+  if (cmd === "js-allocation-timeline" && command[1] === "buckets") {
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-allocation-timeline-buckets", sessionId, limit });
+    if (!response.ok) throw new Error(response.error || "Failed to get JS allocation timeline buckets");
+    console.log(
+      formatJsAllocationTimelineBuckets(response.data as Parameters<typeof formatJsAllocationTimelineBuckets>[0], verbose),
+    );
+    return;
+  }
+
+  if (cmd === "js-allocation-timeline" && command[1] === "hotspots") {
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
+    const offset = typeof flags.offset === "string" ? Number.parseInt(flags.offset, 10) : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-allocation-timeline-hotspots", sessionId, limit, offset });
+    if (!response.ok) throw new Error(response.error || "Failed to get JS allocation timeline hotspots");
+    console.log(
+      formatJsAllocationTimelineHotspots(response.data as Parameters<typeof formatJsAllocationTimelineHotspots>[0], verbose),
+    );
+    return;
+  }
+
+  if (cmd === "js-allocation-timeline" && command[1] === "leak-signal") {
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-allocation-timeline-leak-signal", sessionId });
+    if (!response.ok) throw new Error(response.error || "Failed to get JS allocation timeline leak signal");
+    console.log(
+      formatJsAllocationTimelineLeakSignal(
+        response.data as Parameters<typeof formatJsAllocationTimelineLeakSignal>[0],
+        verbose,
+      ),
+    );
+    return;
+  }
+
+  if (cmd === "js-allocation-timeline" && command[1] === "export") {
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    const filePath = typeof flags.file === "string" ? flags.file : undefined;
+    if (!filePath) throw new Error("Usage: agent-cdp js-allocation-timeline export --file PATH [--session ID]");
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-allocation-timeline-export", sessionId, filePath });
+    if (!response.ok) throw new Error(response.error || "Failed to export JS allocation timeline artifact");
+    console.log(
+      formatJsAllocationTimelineExport(response.data as Parameters<typeof formatJsAllocationTimelineExport>[0], verbose),
+    );
+    return;
+  }
+
+  if (cmd === "js-allocation-timeline" && command[1] === "source-maps") {
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "js-allocation-timeline-source-maps", sessionId });
+    if (!response.ok) throw new Error(response.error || "Failed to get JS allocation timeline source map info");
+    console.log(formatJsSourceMaps(response.data as Parameters<typeof formatJsSourceMaps>[0], verbose));
+    return;
+  }
+
   if (cmd === "js-profile" && command[1] === "start") {
     const name = typeof flags.name === "string" ? flags.name : undefined;
     const samplingIntervalUs =
@@ -702,4 +963,3 @@ export async function main(): Promise<void> {
   console.error(usage());
   process.exit(1);
 }
-

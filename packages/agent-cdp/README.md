@@ -78,6 +78,8 @@ agent-cdp target clear
 - **Memory (raw)** — `memory capture --file PATH` for a heap snapshot file
 - **Heap snapshot tools** — `mem-snapshot` commands to capture, load, summarize, diff snapshots, inspect classes/instances/retainers, and triage leak-style comparisons
 - **JS heap monitor** — `js-memory` commands for sampling, summaries, diffs, trends, and leak-oriented signals
+- **JS allocation profiler** — `js-allocation` commands for sampled allocation timeline summaries, top allocators, bucketed growth, leak-oriented signals, and raw artifact export
+- **JS allocation timeline** — `js-allocation-timeline` commands for DevTools-style heap allocation timeline capture, bucket summaries, linked final snapshot analysis, and raw artifact export
 - **JS profiler** — `js-profile` commands to record CPU profiles, list sessions, hotspots, stacks, diffs, and optional source map help
 
 **4. Stop the daemon**
@@ -88,4 +90,4 @@ agent-cdp stop
 
 ## Command overview
 
-Commands are grouped as **daemon**, **target**, **console**, **trace**, **memory**, **mem-snapshot**, **js-memory**, **js-profile**, and **skills** (bundled reference files). See `agent-cdp --help` for exact syntax and options.
+Commands are grouped as **daemon**, **target**, **console**, **trace**, **memory**, **mem-snapshot**, **js-memory**, **js-allocation**, **js-allocation-timeline**, **js-profile**, and **skills** (bundled reference files). See `agent-cdp --help` for exact syntax and options.

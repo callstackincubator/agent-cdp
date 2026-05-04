@@ -110,6 +110,35 @@ export type IpcCommand =
   | { type: "js-profile-diff"; baseSessionId: string; compareSessionId: string; limit?: number; minDeltaPct?: number }
   | { type: "js-profile-export"; sessionId?: string }
   | { type: "js-profile-source-maps"; sessionId?: string }
+  // JS allocation profiler
+  | {
+      type: "js-allocation-start";
+      name?: string;
+      samplingIntervalBytes?: number;
+      stackDepth?: number;
+      includeObjectsCollectedByMajorGC?: boolean;
+      includeObjectsCollectedByMinorGC?: boolean;
+    }
+  | { type: "js-allocation-stop" }
+  | { type: "js-allocation-status" }
+  | { type: "js-allocation-list-sessions"; limit?: number; offset?: number }
+  | { type: "js-allocation-summary"; sessionId?: string }
+  | { type: "js-allocation-hotspots"; sessionId?: string; limit?: number; offset?: number; sortBy?: string }
+  | { type: "js-allocation-bucketed"; sessionId?: string; limit?: number }
+  | { type: "js-allocation-leak-signal"; sessionId?: string }
+  | { type: "js-allocation-export"; sessionId?: string; filePath: string }
+  | { type: "js-allocation-source-maps"; sessionId?: string }
+  // JS allocation timeline profiler
+  | { type: "js-allocation-timeline-start"; name?: string }
+  | { type: "js-allocation-timeline-stop" }
+  | { type: "js-allocation-timeline-status" }
+  | { type: "js-allocation-timeline-list-sessions"; limit?: number; offset?: number }
+  | { type: "js-allocation-timeline-summary"; sessionId?: string }
+  | { type: "js-allocation-timeline-buckets"; sessionId?: string; limit?: number }
+  | { type: "js-allocation-timeline-hotspots"; sessionId?: string; limit?: number; offset?: number }
+  | { type: "js-allocation-timeline-leak-signal"; sessionId?: string }
+  | { type: "js-allocation-timeline-export"; sessionId?: string; filePath: string }
+  | { type: "js-allocation-timeline-source-maps"; sessionId?: string }
   // Heap snapshot analysis
   | { type: "mem-snapshot-capture"; name?: string; collectGarbage?: boolean; filePath?: string }
   | { type: "mem-snapshot-load"; filePath: string; name?: string }

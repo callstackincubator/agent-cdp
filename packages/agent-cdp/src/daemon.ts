@@ -4,6 +4,8 @@ import path from "node:path";
 
 import { ConsoleCollector } from "./console.js";
 import { HeapSnapshotManager } from "./heap-snapshot/index.js";
+import { JsAllocationProfiler } from "./js-allocation/index.js";
+import { JsAllocationTimelineProfiler } from "./js-allocation-timeline/index.js";
 import { JsHeapUsageMonitor } from "./js-memory/index.js";
 import { JsProfiler } from "./js-profiler/index.js";
 import { MemorySnapshotter } from "./memory.js";
@@ -42,6 +44,8 @@ class Daemon {
   private readonly consoleCollector = new ConsoleCollector();
   private readonly memorySnapshotter = new MemorySnapshotter();
   private readonly heapSnapshotManager = new HeapSnapshotManager();
+  private readonly jsAllocationProfiler = new JsAllocationProfiler();
+  private readonly jsAllocationTimelineProfiler = new JsAllocationTimelineProfiler(this.heapSnapshotManager);
   private readonly jsHeapUsageMonitor = new JsHeapUsageMonitor();
   private readonly providers = createTargetProviders();
   private readonly sessionManager = new SessionManager(this.providers);
@@ -285,6 +289,107 @@ class Daemon {
 
       if (command.type === "js-profile-source-maps") {
         return { ok: true, data: this.jsProfiler.getSourceMaps(command.sessionId) };
+      }
+
+      if (command.type === "js-allocation-start") {
+        const session = await this.requireSession();
+        await this.jsAllocationProfiler.start(session, {
+          name: command.name,
+          samplingIntervalBytes: command.samplingIntervalBytes,
+          stackDepth: command.stackDepth,
+          includeObjectsCollectedByMajorGC: command.includeObjectsCollectedByMajorGC,
+          includeObjectsCollectedByMinorGC: command.includeObjectsCollectedByMinorGC,
+        });
+        return { ok: true, data: null };
+      }
+
+      if (command.type === "js-allocation-stop") {
+        const session = await this.requireSession();
+        return { ok: true, data: await this.jsAllocationProfiler.stop(session) };
+      }
+
+      if (command.type === "js-allocation-status") {
+        return { ok: true, data: this.jsAllocationProfiler.getStatus() };
+      }
+
+      if (command.type === "js-allocation-list-sessions") {
+        return { ok: true, data: this.jsAllocationProfiler.listSessions(command.limit, command.offset) };
+      }
+
+      if (command.type === "js-allocation-summary") {
+        return { ok: true, data: this.jsAllocationProfiler.getSummary(command.sessionId) };
+      }
+
+      if (command.type === "js-allocation-hotspots") {
+        return {
+          ok: true,
+          data: this.jsAllocationProfiler.getHotspots(command.sessionId, command.limit, command.offset, command.sortBy),
+        };
+      }
+
+      if (command.type === "js-allocation-bucketed") {
+        return { ok: true, data: this.jsAllocationProfiler.getBucketed(command.sessionId, command.limit) };
+      }
+
+      if (command.type === "js-allocation-leak-signal") {
+        return { ok: true, data: this.jsAllocationProfiler.getLeakSignal(command.sessionId) };
+      }
+
+      if (command.type === "js-allocation-export") {
+        return { ok: true, data: await this.jsAllocationProfiler.exportToFile(command.filePath, command.sessionId) };
+      }
+
+      if (command.type === "js-allocation-source-maps") {
+        return { ok: true, data: this.jsAllocationProfiler.getSourceMaps(command.sessionId) };
+      }
+
+      if (command.type === "js-allocation-timeline-start") {
+        const session = await this.requireSession();
+        await this.jsAllocationTimelineProfiler.start(session, { name: command.name });
+        return { ok: true, data: null };
+      }
+
+      if (command.type === "js-allocation-timeline-stop") {
+        const session = await this.requireSession();
+        return { ok: true, data: await this.jsAllocationTimelineProfiler.stop(session) };
+      }
+
+      if (command.type === "js-allocation-timeline-status") {
+        return { ok: true, data: this.jsAllocationTimelineProfiler.getStatus() };
+      }
+
+      if (command.type === "js-allocation-timeline-list-sessions") {
+        return { ok: true, data: this.jsAllocationTimelineProfiler.listSessions(command.limit, command.offset) };
+      }
+
+      if (command.type === "js-allocation-timeline-summary") {
+        return { ok: true, data: this.jsAllocationTimelineProfiler.getSummary(command.sessionId) };
+      }
+
+      if (command.type === "js-allocation-timeline-buckets") {
+        return { ok: true, data: this.jsAllocationTimelineProfiler.getBuckets(command.sessionId, command.limit) };
+      }
+
+      if (command.type === "js-allocation-timeline-hotspots") {
+        return {
+          ok: true,
+          data: this.jsAllocationTimelineProfiler.getHotspots(command.sessionId, command.limit, command.offset),
+        };
+      }
+
+      if (command.type === "js-allocation-timeline-leak-signal") {
+        return { ok: true, data: this.jsAllocationTimelineProfiler.getLeakSignal(command.sessionId) };
+      }
+
+      if (command.type === "js-allocation-timeline-export") {
+        return {
+          ok: true,
+          data: await this.jsAllocationTimelineProfiler.exportToFile(command.filePath, command.sessionId),
+        };
+      }
+
+      if (command.type === "js-allocation-timeline-source-maps") {
+        return { ok: true, data: this.jsAllocationTimelineProfiler.getSourceMaps(command.sessionId) };
       }
 
       if (command.type === "mem-snapshot-capture") {

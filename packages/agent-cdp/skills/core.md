@@ -157,6 +157,58 @@ agent-cdp js-memory leak-signal                       # heuristic leak indicator
 Use `js-memory` for quick "is heap growing?" checks. Use `mem-snapshot` for
 deep object-level analysis.
 
+## JS allocation profiler
+
+Sampled allocation timeline summary. Use this to find which callsites are
+driving allocation pressure over the lifetime of an interaction without feeding
+the raw sampling profile to the LLM by default.
+
+```bash
+# Record
+agent-cdp js-allocation start [--name NAME] [--interval BYTES] [--stack-depth N] [--include-major-gc] [--include-minor-gc]
+# ... run the workload you suspect is leaking ...
+agent-cdp js-allocation stop
+
+# Inspect
+agent-cdp js-allocation status
+agent-cdp js-allocation list [--limit N] [--offset N]
+agent-cdp js-allocation summary [--session ID]
+agent-cdp js-allocation hotspots [--session ID] [--limit N] [--offset N] [--sort bytes|samples]
+agent-cdp js-allocation bucketed [--session ID] [--limit N]
+agent-cdp js-allocation leak-signal [--session ID]
+agent-cdp js-allocation export --file PATH [--session ID]
+```
+
+Use `js-allocation` when you need a compact leak-oriented summary of allocation
+pressure. Use `mem-snapshot` when you need proof that objects are still retained
+after cleanup.
+
+## JS allocation timeline
+
+DevTools-style "Allocations on timeline" workflow. This records live heap object
+tracking over time and ends with a final heap snapshot that includes allocation
+trace data.
+
+```bash
+# Record
+agent-cdp js-allocation-timeline start [--name NAME]
+# ... run the leaking interaction ...
+agent-cdp js-allocation-timeline stop
+
+# Inspect
+agent-cdp js-allocation-timeline status
+agent-cdp js-allocation-timeline list [--limit N] [--offset N]
+agent-cdp js-allocation-timeline summary [--session ID]
+agent-cdp js-allocation-timeline buckets [--session ID] [--limit N]
+agent-cdp js-allocation-timeline hotspots [--session ID] [--limit N] [--offset N]
+agent-cdp js-allocation-timeline leak-signal [--session ID]
+agent-cdp js-allocation-timeline export --file PATH [--session ID]
+```
+
+Use `js-allocation-timeline` when you need a heavier-weight timeline capture
+that tracks heap growth during the interaction and ties the result to a final
+heap snapshot with allocation traces.
+
 ## JS CPU profiler
 
 Sampling CPU profiler with source-map support.

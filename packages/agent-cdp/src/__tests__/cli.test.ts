@@ -16,5 +16,7 @@ describe("cli", () => {
     expect(usage()).toContain("status");
     expect(usage()).toContain("stop");
     expect(usage()).toContain("target list");
+    expect(usage()).toContain("js-allocation start");
+    expect(usage()).toContain("js-allocation-timeline start");
   });
 });
