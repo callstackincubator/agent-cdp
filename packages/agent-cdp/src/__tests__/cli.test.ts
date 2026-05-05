@@ -21,6 +21,8 @@ describe("cli", () => {
     expect(usage()).toContain("stop");
     expect(usage()).toContain("target list [--url URL]");
     expect(usage()).toContain("target select <id> [--url URL]");
+    expect(usage()).toContain("network start [--name NAME] [--preserve-across-navigation]");
+    expect(usage()).toContain("network response-body --id REQ_ID [--session ID] [--file PATH]");
     expect(usage()).toContain("js-allocation start");
     expect(usage()).toContain("js-allocation-timeline start");
   });

@@ -11,6 +11,15 @@ import {
   formatTraceSummary,
 } from "./formatters.js";
 import {
+  formatNetworkBody,
+  formatNetworkHeaders,
+  formatNetworkList,
+  formatNetworkRequest,
+  formatNetworkSessions,
+  formatNetworkStatus,
+  formatNetworkSummary,
+} from "./network/formatters.js";
+import {
   formatMemLeakCandidates,
   formatMemLeakTriplet,
   formatMemSnapshotClass,
@@ -91,6 +100,19 @@ Targets:
 Console:
   console list [--limit N]
   console get <id>
+
+Network:
+  network status
+  network start [--name NAME] [--preserve-across-navigation]
+  network stop
+  network sessions [--limit N] [--offset N]
+  network summary [--session ID]
+  network list [--session ID] [--limit N] [--offset N] [--type TYPE] [--status STATUS] [--method METHOD] [--text TEXT] [--min-ms N] [--max-ms N] [--min-bytes N] [--max-bytes N]
+  network request --id REQ_ID [--session ID]
+  network request-headers --id REQ_ID [--session ID] [--name TEXT]
+  network response-headers --id REQ_ID [--session ID] [--name TEXT]
+  network request-body --id REQ_ID [--session ID] [--file PATH]
+  network response-body --id REQ_ID [--session ID] [--file PATH]
 
 Trace:
   trace start
@@ -356,6 +378,142 @@ export async function main(): Promise<void> {
       throw new Error(response.error || "Failed to get console message");
     }
     console.log(formatConsoleMessage(readConsoleMessage(response.data), verbose));
+    return;
+  }
+
+  if (cmd === "network" && command[1] === "status") {
+    await ensureDaemon();
+    const response = await sendCommand({ type: "network-status" });
+    if (!response.ok) throw new Error(response.error || "Failed to get network status");
+    console.log(formatNetworkStatus(response.data as Parameters<typeof formatNetworkStatus>[0], verbose));
+    return;
+  }
+
+  if (cmd === "network" && command[1] === "start") {
+    const name = typeof flags.name === "string" ? flags.name : undefined;
+    const preserveAcrossNavigation = flags["preserve-across-navigation"] === true;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "network-start", name, preserveAcrossNavigation });
+    if (!response.ok) throw new Error(response.error || "Failed to start network session");
+    console.log(`Network session started. Session ID: ${response.data as string}`);
+    return;
+  }
+
+  if (cmd === "network" && command[1] === "stop") {
+    await ensureDaemon();
+    const response = await sendCommand({ type: "network-stop" });
+    if (!response.ok) throw new Error(response.error || "Failed to stop network session");
+    console.log(`Network session stopped. Session ID: ${response.data as string}`);
+    return;
+  }
+
+  if (cmd === "network" && command[1] === "sessions") {
+    const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
+    const offset = typeof flags.offset === "string" ? Number.parseInt(flags.offset, 10) : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "network-list-sessions", limit, offset });
+    if (!response.ok) throw new Error(response.error || "Failed to list network sessions");
+    console.log(formatNetworkSessions(response.data as Parameters<typeof formatNetworkSessions>[0], verbose));
+    return;
+  }
+
+  if (cmd === "network" && command[1] === "summary") {
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "network-summary", sessionId });
+    if (!response.ok) throw new Error(response.error || "Failed to summarize network requests");
+    console.log(formatNetworkSummary(response.data as Parameters<typeof formatNetworkSummary>[0], verbose));
+    return;
+  }
+
+  if (cmd === "network" && command[1] === "list") {
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
+    const offset = typeof flags.offset === "string" ? Number.parseInt(flags.offset, 10) : undefined;
+    const resourceType = typeof flags.type === "string" ? flags.type : undefined;
+    const status = typeof flags.status === "string" ? flags.status : undefined;
+    const method = typeof flags.method === "string" ? flags.method : undefined;
+    const text = typeof flags.text === "string" ? flags.text : undefined;
+    const minMs = typeof flags["min-ms"] === "string" ? Number.parseFloat(flags["min-ms"]) : undefined;
+    const maxMs = typeof flags["max-ms"] === "string" ? Number.parseFloat(flags["max-ms"]) : undefined;
+    const minBytes = typeof flags["min-bytes"] === "string" ? Number.parseInt(flags["min-bytes"], 10) : undefined;
+    const maxBytes = typeof flags["max-bytes"] === "string" ? Number.parseInt(flags["max-bytes"], 10) : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({
+      type: "network-list",
+      sessionId,
+      limit,
+      offset,
+      resourceType,
+      status,
+      method,
+      text,
+      minMs,
+      maxMs,
+      minBytes,
+      maxBytes,
+    });
+    if (!response.ok) throw new Error(response.error || "Failed to list network requests");
+    console.log(formatNetworkList(response.data as Parameters<typeof formatNetworkList>[0]));
+    return;
+  }
+
+  if (cmd === "network" && command[1] === "request") {
+    const requestId = typeof flags.id === "string" ? flags.id : undefined;
+    if (!requestId) throw new Error("Usage: agent-cdp network request --id REQ_ID [--session ID]");
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "network-request", requestId, sessionId });
+    if (!response.ok) throw new Error(response.error || "Failed to get network request");
+    console.log(formatNetworkRequest(response.data as Parameters<typeof formatNetworkRequest>[0], verbose));
+    return;
+  }
+
+  if (cmd === "network" && command[1] === "request-headers") {
+    const requestId = typeof flags.id === "string" ? flags.id : undefined;
+    if (!requestId) throw new Error("Usage: agent-cdp network request-headers --id REQ_ID [--session ID] [--name TEXT]");
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    const name = typeof flags.name === "string" ? flags.name : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "network-request-headers", requestId, sessionId, name });
+    if (!response.ok) throw new Error(response.error || "Failed to get request headers");
+    console.log(formatNetworkHeaders(response.data as Parameters<typeof formatNetworkHeaders>[0]));
+    return;
+  }
+
+  if (cmd === "network" && command[1] === "response-headers") {
+    const requestId = typeof flags.id === "string" ? flags.id : undefined;
+    if (!requestId) throw new Error("Usage: agent-cdp network response-headers --id REQ_ID [--session ID] [--name TEXT]");
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    const name = typeof flags.name === "string" ? flags.name : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "network-response-headers", requestId, sessionId, name });
+    if (!response.ok) throw new Error(response.error || "Failed to get response headers");
+    console.log(formatNetworkHeaders(response.data as Parameters<typeof formatNetworkHeaders>[0]));
+    return;
+  }
+
+  if (cmd === "network" && command[1] === "request-body") {
+    const requestId = typeof flags.id === "string" ? flags.id : undefined;
+    if (!requestId) throw new Error("Usage: agent-cdp network request-body --id REQ_ID [--session ID] [--file PATH]");
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    const filePath = typeof flags.file === "string" ? flags.file : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "network-request-body", requestId, sessionId, filePath });
+    if (!response.ok) throw new Error(response.error || "Failed to get request body");
+    console.log(formatNetworkBody(response.data as Parameters<typeof formatNetworkBody>[0]));
+    return;
+  }
+
+  if (cmd === "network" && command[1] === "response-body") {
+    const requestId = typeof flags.id === "string" ? flags.id : undefined;
+    if (!requestId) throw new Error("Usage: agent-cdp network response-body --id REQ_ID [--session ID] [--file PATH]");
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    const filePath = typeof flags.file === "string" ? flags.file : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "network-response-body", requestId, sessionId, filePath });
+    if (!response.ok) throw new Error(response.error || "Failed to get response body");
+    console.log(formatNetworkBody(response.data as Parameters<typeof formatNetworkBody>[0]));
     return;
   }
 

@@ -9,6 +9,7 @@ import { JsAllocationTimelineProfiler } from "./js-allocation-timeline/index.js"
 import { JsHeapUsageMonitor } from "./js-memory/index.js";
 import { JsProfiler } from "./js-profiler/index.js";
 import { MemorySnapshotter } from "./memory.js";
+import { NetworkManager } from "./network/index.js";
 import { createTargetProviders } from "./providers.js";
 import { SessionManager } from "./session-manager.js";
 import { TraceRecorder } from "./trace.js";
@@ -43,6 +44,7 @@ class Daemon {
   private readonly startedAt = Date.now();
   private readonly consoleCollector = new ConsoleCollector();
   private readonly memorySnapshotter = new MemorySnapshotter();
+  private readonly networkManager = new NetworkManager();
   private readonly heapSnapshotManager = new HeapSnapshotManager();
   private readonly jsAllocationProfiler = new JsAllocationProfiler();
   private readonly jsAllocationTimelineProfiler = new JsAllocationTimelineProfiler(this.heapSnapshotManager);
@@ -82,6 +84,7 @@ class Daemon {
     const shutdown = () => {
       void this.sessionManager.clearTarget().finally(() => {
         this.consoleCollector.detach();
+        this.networkManager.detach();
         this.stop();
         process.exit(0);
       });
@@ -152,6 +155,7 @@ class Daemon {
         const session = this.sessionManager.getSession();
         if (session) {
           await this.consoleCollector.attach(session);
+          await this.networkManager.attach(session);
         }
         return {
           ok: true,
@@ -161,8 +165,82 @@ class Daemon {
 
       if (command.type === "clear-target") {
         this.consoleCollector.detach();
+        this.networkManager.detach();
         await this.sessionManager.clearTarget();
         return { ok: true, data: "Target cleared" };
+      }
+
+      if (command.type === "network-status") {
+        return { ok: true, data: this.networkManager.getStatus() };
+      }
+
+      if (command.type === "network-start") {
+        const session = await this.requireConnectedSession();
+        if (!this.networkManager.isAttached()) {
+          await this.networkManager.attach(session);
+        }
+        return {
+          ok: true,
+          data: this.networkManager.start(command.name, command.preserveAcrossNavigation === true),
+        };
+      }
+
+      if (command.type === "network-stop") {
+        return { ok: true, data: await this.networkManager.stop() };
+      }
+
+      if (command.type === "network-list-sessions") {
+        return { ok: true, data: this.networkManager.listSessions(command.limit, command.offset) };
+      }
+
+      if (command.type === "network-summary") {
+        await this.ensureNetworkSessionReady();
+        return { ok: true, data: this.networkManager.getSummary(command.sessionId) };
+      }
+
+      if (command.type === "network-list") {
+        await this.ensureNetworkSessionReady();
+        return {
+          ok: true,
+          data: this.networkManager.list({
+            sessionId: command.sessionId,
+            limit: command.limit,
+            offset: command.offset,
+            type: command.resourceType,
+            status: command.status,
+            method: command.method,
+            text: command.text,
+            minMs: command.minMs,
+            maxMs: command.maxMs,
+            minBytes: command.minBytes,
+            maxBytes: command.maxBytes,
+          }),
+        };
+      }
+
+      if (command.type === "network-request") {
+        await this.ensureNetworkSessionReady();
+        return { ok: true, data: this.networkManager.getRequest(command.requestId, command.sessionId) };
+      }
+
+      if (command.type === "network-request-headers") {
+        await this.ensureNetworkSessionReady();
+        return { ok: true, data: this.networkManager.getRequestHeaders(command.requestId, command.sessionId, command.name) };
+      }
+
+      if (command.type === "network-response-headers") {
+        await this.ensureNetworkSessionReady();
+        return { ok: true, data: this.networkManager.getResponseHeaders(command.requestId, command.sessionId, command.name) };
+      }
+
+      if (command.type === "network-request-body") {
+        await this.ensureNetworkSessionReady();
+        return { ok: true, data: await this.networkManager.getRequestBody(command.requestId, command.sessionId, command.filePath) };
+      }
+
+      if (command.type === "network-response-body") {
+        await this.ensureNetworkSessionReady();
+        return { ok: true, data: await this.networkManager.getResponseBody(command.requestId, command.sessionId, command.filePath) };
       }
 
       if (command.type === "list-console-messages") {
@@ -555,6 +633,16 @@ class Daemon {
     }
 
     await this.consoleCollector.attach(session);
+  }
+
+  private async ensureNetworkSessionReady(): Promise<void> {
+    const currentSession = this.sessionManager.getSession();
+    const wasConnected = currentSession?.transport.isConnected() || false;
+    const session = await this.requireConnectedSession();
+    if (wasConnected && this.networkManager.isAttached()) {
+      return;
+    }
+    await this.networkManager.attach(session);
   }
 
   private async requireConnectedSession() {
