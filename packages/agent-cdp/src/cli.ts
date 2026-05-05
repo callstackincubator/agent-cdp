@@ -84,8 +84,8 @@ Daemon:
   status    Show daemon status
 
 Targets:
-  target list --url URL
-  target select <id> --url URL
+  target list [--url URL]
+  target select <id> [--url URL]
   target clear
 
 Console:
@@ -308,7 +308,7 @@ export async function main(): Promise<void> {
   if (cmd === "target" && command[1] === "select") {
     const targetId = command[2];
     if (!targetId) {
-      throw new Error("Usage: agent-cdp target select <id> --url URL");
+      throw new Error("Usage: agent-cdp target select <id> [--url URL]");
     }
     await ensureDaemon();
     const response = await sendCommand({
