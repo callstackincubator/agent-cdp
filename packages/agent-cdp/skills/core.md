@@ -39,16 +39,19 @@ Always start the daemon before any other commands. `start` is idempotent.
 A "target" is a Chrome tab or Node.js process exposing a CDP endpoint.
 
 ```bash
+agent-cdp target list                                  # scan default local CDP URLs (9222, 9229, 8081)
 agent-cdp target list --url http://localhost:9229      # list targets for a Node.js process
 agent-cdp target list --url http://localhost:9222      # list targets for Chrome
 agent-cdp target list --url http://localhost:8081      # list targets for React Native (Metro)
-agent-cdp target select <id> --url URL                 # select a specific target
+agent-cdp target select <id>                           # select a specific target using the URL encoded in the id
+agent-cdp target select <id> --url URL                 # optional URL consistency check
 agent-cdp target clear                                 # deselect the current target
 ```
 
 The `--url` flag is the CDP discovery URL (the `--inspect` address for Node.js,
-or Chrome's remote debugging port). After `target select`, subsequent commands
-use that target automatically.
+or Chrome's remote debugging port). When omitted, `target list` scans the local
+default URLs and encodes the discovery URL into each target id. After
+`target select`, subsequent commands use that target automatically.
 
 ### React Native
 
@@ -56,7 +59,7 @@ React Native apps expose a CDP endpoint through the Metro bundler on port 8081.
 
 ```bash
 agent-cdp target list --url http://localhost:8081
-agent-cdp target select <id> --url http://localhost:8081
+agent-cdp target select <id>
 ```
 
 Requirements:

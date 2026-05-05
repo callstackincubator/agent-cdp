@@ -6,9 +6,9 @@
 
 | Environment | Notes |
 |-------------|--------|
-| **Chrome / Chromium** | Requires a CDP debug endpoint, typically with remote debugging enabled (for example port `9222`). You point the CLI at the `/json/list` URL for that endpoint. |
-| **React Native** | Works with the Metro / dev tooling that exposes a CDP-compatible target list (often `http://127.0.0.1:8081` during development). Same flow as Chrome: `target list` with the dev server URL. |
-| **Node.js** | Supports attaching to Node processes started with **`--inspect`** or **`--inspect-brk`** (or the equivalent `NODE_OPTIONS`). They expose the same CDP discovery model as Chrome; point `target list` at the inspector base URL (often `http://127.0.0.1:9229` for the default port, or your `--inspect=host:port` value). |
+| **Chrome / Chromium** | Requires a CDP debug endpoint, typically with remote debugging enabled (for example port `9222`). You can point the CLI at that endpoint explicitly, or let `target list` scan the default local ports. |
+| **React Native** | Works with the Metro / dev tooling that exposes a CDP-compatible target list (often `http://127.0.0.1:8081` during development). `target list` scans that port by default, or you can pass the dev server URL explicitly. |
+| **Node.js** | Supports attaching to Node processes started with **`--inspect`** or **`--inspect-brk`** (or the equivalent `NODE_OPTIONS`). They expose the same CDP discovery model as Chrome; `target list` scans the default inspect port (`http://127.0.0.1:9229`) automatically, or you can pass your `--inspect=host:port` URL explicitly. |
 
 Anything that exposes the same style of CDP HTTP discovery (`/json/list`) and WebSocket debugging should work; behavior depends on what the target implements.
 
@@ -45,11 +45,26 @@ agent-cdp status
 
 **2. List targets and select one**
 
+By default, `target list` scans these local discovery URLs in parallel:
+
+- `http://127.0.0.1:9222`
+- `http://127.0.0.1:9229`
+- `http://127.0.0.1:8081`
+
+Returned target IDs embed the discovery URL, so `target select <target-id>` does not require `--url`.
+
+Default local scan:
+
+```sh
+agent-cdp target list
+agent-cdp target select <target-id>
+```
+
 Chrome (example port):
 
 ```sh
 agent-cdp target list --url http://127.0.0.1:9222
-agent-cdp target select <target-id> --url http://127.0.0.1:9222
+agent-cdp target select <target-id>
 ```
 
 React Native (example Metro URL):
@@ -62,8 +77,10 @@ Node.js (example default inspect port after starting your app with `node --inspe
 
 ```sh
 agent-cdp target list --url http://127.0.0.1:9229
-agent-cdp target select <target-id> --url http://127.0.0.1:9229
+agent-cdp target select <target-id>
 ```
+
+If you pass `--url` to `target select`, it must match the discovery URL encoded in the target ID.
 
 Clear the current selection when needed:
 
