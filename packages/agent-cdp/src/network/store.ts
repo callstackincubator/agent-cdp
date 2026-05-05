@@ -51,6 +51,10 @@ export class NetworkStore {
     return finalized;
   }
 
+  discardActiveSession(): void {
+    this.activeSession = null;
+  }
+
   record(request: NetworkRequest, isNew: boolean): void {
     if (isNew) {
       this.liveRequests.push(request);

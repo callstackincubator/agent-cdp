@@ -83,6 +83,8 @@ Console messages are collected while the daemon is running with an active target
 
 Compact, agent-friendly network inspection with a bounded live buffer and optional persisted sessions.
 
+After `target select`, the daemon starts an initial active network session automatically. That session appears in `network sessions` and can be stopped with `network stop`, just like a session created with `network start`.
+
 ```bash
 agent-cdp network status
 
@@ -114,7 +116,9 @@ agent-cdp network response-body --id req_12 --file ./response.txt
 
 Behavior notes:
 - The live buffer keeps only the most recent `200` requests.
+- Selecting a target starts the initial active session automatically.
 - `network start` begins empty and does not backfill earlier live-buffer entries.
+- `network start` requires no active session. Stop the current session first if one is already running.
 - Without `--session`, queries prefer the active or latest persisted session; otherwise they use live data.
 - `network request` omits headers and bodies by default. Use the explicit follow-up commands for those.
 - `--preserve-across-navigation` applies only to persisted recording sessions.

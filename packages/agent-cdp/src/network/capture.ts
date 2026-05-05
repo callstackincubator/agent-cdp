@@ -65,11 +65,11 @@ export class NetworkCapture {
 
     const result = (await this.session.transport.send("Network.getRequestPostData", {
       requestId: request.rawRequestId,
-    })) as { postData?: string };
+    })) as { postData?: string; base64Encoded?: boolean };
     if (typeof result.postData !== "string") {
       throw new Error("Request body unavailable");
     }
-    request.requestBody = { text: result.postData, base64Encoded: false };
+    request.requestBody = { text: result.postData, base64Encoded: result.base64Encoded === true };
     request.hasRequestBody = true;
     return request.requestBody;
   }

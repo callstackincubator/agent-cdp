@@ -31,7 +31,7 @@ export function formatNetworkStatus(result: NetworkStatusResult, verbose = false
 
 export function formatNetworkSessions(entries: NetworkSessionListEntry[], verbose = false): string {
   if (entries.length === 0) {
-    return "No network sessions. Run network start/stop first.";
+    return "No network sessions yet. Select a target to start capture.";
   }
 
   if (!verbose) {

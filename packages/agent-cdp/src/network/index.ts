@@ -30,7 +30,19 @@ export class NetworkManager {
   );
 
   async attach(session: RuntimeSession): Promise<void> {
-    await this.capture.attach(session);
+    const shouldCreateInitialSession = !this.store.getLatestSession();
+    if (shouldCreateInitialSession) {
+      this.store.startSession();
+    }
+
+    try {
+      await this.capture.attach(session);
+    } catch (error) {
+      if (shouldCreateInitialSession) {
+        this.store.discardActiveSession();
+      }
+      throw error;
+    }
   }
 
   detach(): void {
@@ -94,7 +106,7 @@ export class NetworkManager {
   async getRequestBody(requestId: string, sessionId?: string, filePath?: string): Promise<NetworkBodyResult> {
     const request = this.getRequest(requestId, sessionId);
     try {
-      const body = request.hasRequestBody ? await this.capture.getRequestBody(request) : undefined;
+      const body = await this.capture.getRequestBody(request);
       if (!body) {
         return unavailableBody("request", request, request.requestBodyUnavailable?.reason || "Target did not expose a request body");
       }
@@ -157,6 +169,8 @@ export class NetworkManager {
     body: { text: string; base64Encoded: boolean },
     filePath?: string,
   ): Promise<NetworkBodyResult> {
+    const normalizedBody = normalizeBodyContent(kind, request, body);
+
     if (!filePath) {
       return {
         requestId: request.id,
@@ -164,8 +178,8 @@ export class NetworkManager {
         kind,
         available: true,
         mimeType: request.mimeType,
-        base64Encoded: body.base64Encoded,
-        text: body.text,
+        base64Encoded: normalizedBody.base64Encoded,
+        text: normalizedBody.text,
       };
     }
 
@@ -178,7 +192,7 @@ export class NetworkManager {
       kind,
       available: true,
       mimeType: request.mimeType,
-      base64Encoded: body.base64Encoded,
+      base64Encoded: normalizedBody.base64Encoded,
       filePath: outputPath,
       bytesWritten: buffer.byteLength,
     };
@@ -193,6 +207,69 @@ function unavailableBody(kind: "request" | "response", request: NetworkRequest, 
     available: false,
     reason,
   };
+}
+
+function normalizeBodyContent(
+  kind: "request" | "response",
+  request: NetworkRequest,
+  body: { text: string; base64Encoded: boolean },
+): { text: string; base64Encoded: boolean } {
+  if (!body.base64Encoded) {
+    return body;
+  }
+
+  const contentType = getBodyContentType(kind, request);
+  if (!isTextLikeContentType(contentType)) {
+    return body;
+  }
+
+  try {
+    return {
+      text: Buffer.from(body.text, "base64").toString("utf8"),
+      base64Encoded: false,
+    };
+  } catch {
+    return body;
+  }
+}
+
+function getBodyContentType(kind: "request" | "response", request: NetworkRequest): string | undefined {
+  const headers = kind === "request" ? request.requestHeaders : request.responseHeaders;
+  const headerValue = headers?.["content-type"] || headers?.["Content-Type"];
+  if (typeof headerValue === "string" && headerValue.length > 0) {
+    return headerValue;
+  }
+
+  return kind === "response" ? request.mimeType : undefined;
+}
+
+function isTextLikeContentType(contentType: string | undefined): boolean {
+  if (!contentType) {
+    return false;
+  }
+
+  const normalized = contentType.split(";", 1)[0]?.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  if (normalized.startsWith("text/")) {
+    return true;
+  }
+
+  return [
+    "application/json",
+    "application/xml",
+    "application/javascript",
+    "application/x-javascript",
+    "application/ecmascript",
+    "application/x-www-form-urlencoded",
+    "application/graphql",
+    "application/problem+json",
+    "application/problem+xml",
+  ].includes(normalized)
+    || normalized.endsWith("+json")
+    || normalized.endsWith("+xml");
 }
 
 export type {

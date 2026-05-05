@@ -20,6 +20,8 @@ class FakeNetworkTransport implements CdpTransport {
   private listener: ((message: CdpEventMessage) => void) | null = null;
   readonly sentMethods: string[] = [];
   connected = true;
+  responseBodyResult: { body: string; base64Encoded?: boolean } = { body: "response-body", base64Encoded: false };
+  requestPostDataResult: { postData: string; base64Encoded?: boolean } = { postData: "request:" };
 
   connect(): Promise<void> {
     this.connected = true;
@@ -38,10 +40,13 @@ class FakeNetworkTransport implements CdpTransport {
   send(method: string, params?: Record<string, unknown>): Promise<unknown> {
     this.sentMethods.push(method);
     if (method === "Network.getResponseBody") {
-      return Promise.resolve({ body: "response-body", base64Encoded: false });
+      return Promise.resolve(this.responseBodyResult);
     }
     if (method === "Network.getRequestPostData") {
-      return Promise.resolve({ postData: `request:${String(params?.requestId || "")}` });
+      return Promise.resolve({
+        postData: `${this.requestPostDataResult.postData}${String(params?.requestId || "")}`,
+        base64Encoded: this.requestPostDataResult.base64Encoded,
+      });
     }
     return Promise.resolve(undefined);
   }
@@ -272,6 +277,49 @@ describe("network queries and formatting", () => {
 });
 
 describe("network manager bodies", () => {
+  it("creates an initial session on first attach and lets users stop it", async () => {
+    const transport = new FakeNetworkTransport();
+    const manager = new NetworkManager();
+
+    await manager.attach(createSession(transport));
+
+    expect(manager.getStatus().activeSession?.id).toBe("net_1");
+    expect(manager.listSessions()).toEqual([
+      expect.objectContaining({ id: "net_1", active: true, preserveAcrossNavigation: false, requestCount: 0 }),
+    ]);
+
+    transport.emit({
+      method: "Network.requestWillBeSent",
+      params: {
+        requestId: "startup-1",
+        timestamp: 1,
+        wallTime: 10,
+        type: "Fetch",
+        request: { url: "https://example.test/startup", method: "GET" },
+      },
+    });
+    transport.emit({
+      method: "Network.responseReceived",
+      params: {
+        requestId: "startup-1",
+        type: "Fetch",
+        response: { status: 200, statusText: "OK", mimeType: "text/plain" },
+      },
+    });
+    transport.emit({ method: "Network.loadingFinished", params: { requestId: "startup-1", timestamp: 1.1, encodedDataLength: 128 } });
+
+    expect(manager.getSummary()).toMatchObject({ source: "session", sessionId: "net_1", requestCount: 1 });
+    await expect(manager.stop()).resolves.toBe("net_1");
+    expect(manager.getStatus().activeSession).toBeNull();
+    expect(manager.listSessions()).toEqual([
+      expect.objectContaining({ id: "net_1", active: false, preserveAcrossNavigation: false, requestCount: 1 }),
+    ]);
+
+    await manager.attach(createSession(transport));
+    expect(manager.getStatus().activeSession).toBeNull();
+    expect(manager.listSessions()).toHaveLength(1);
+  });
+
   it("uses the active session by default and exports response bodies", async () => {
     const transport = new FakeNetworkTransport();
     const manager = new NetworkManager();
@@ -280,6 +328,7 @@ describe("network manager bodies", () => {
 
     try {
       await manager.attach(createSession(transport));
+      await manager.stop();
       const sessionId = manager.start("capture", false);
 
       transport.emit({
@@ -316,5 +365,116 @@ describe("network manager bodies", () => {
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }
+  });
+
+  it("decodes base64 text bodies for text-like content types and keeps binary bodies encoded", async () => {
+    const transport = new FakeNetworkTransport();
+    const manager = new NetworkManager();
+
+    await manager.attach(createSession(transport));
+
+    transport.emit({
+      method: "Network.requestWillBeSent",
+      params: {
+        requestId: "body-text",
+        timestamp: 1,
+        wallTime: 10,
+        type: "Fetch",
+        request: { url: "https://example.test/text", method: "GET" },
+      },
+    });
+    transport.emit({
+      method: "Network.responseReceived",
+      params: {
+        requestId: "body-text",
+        type: "Fetch",
+        response: {
+          status: 200,
+          statusText: "OK",
+          mimeType: "application/json",
+          headers: { "content-type": "application/json; charset=utf-8" },
+        },
+      },
+    });
+    transport.emit({ method: "Network.loadingFinished", params: { requestId: "body-text", timestamp: 1.1, encodedDataLength: 16 } });
+
+    transport.emit({
+      method: "Network.requestWillBeSent",
+      params: {
+        requestId: "body-binary",
+        timestamp: 2,
+        wallTime: 20,
+        type: "Image",
+        request: { url: "https://example.test/image.png", method: "GET" },
+      },
+    });
+    transport.emit({
+      method: "Network.responseReceived",
+      params: {
+        requestId: "body-binary",
+        type: "Image",
+        response: {
+          status: 200,
+          statusText: "OK",
+          mimeType: "image/png",
+          headers: { "content-type": "image/png" },
+        },
+      },
+    });
+    transport.emit({ method: "Network.loadingFinished", params: { requestId: "body-binary", timestamp: 2.1, encodedDataLength: 24 } });
+
+    const textRequestId = manager.list({ text: "/text" }).items[0]?.id;
+    expect(textRequestId).toBeDefined();
+    transport.responseBodyResult = {
+      body: Buffer.from('{"ok":true}', "utf8").toString("base64"),
+      base64Encoded: true,
+    };
+    const textBody = await manager.getResponseBody(textRequestId || "");
+    expect(textBody).toMatchObject({ available: true, base64Encoded: false, text: '{"ok":true}' });
+    expect(formatNetworkBody(textBody)).toBe('{"ok":true}');
+
+    const binaryRequestId = manager.list({ text: "image.png" }).items[0]?.id;
+    expect(binaryRequestId).toBeDefined();
+    transport.responseBodyResult = {
+      body: "iVBORw0KGgoAAAANSUhEUg==",
+      base64Encoded: true,
+    };
+    const binaryBody = await manager.getResponseBody(binaryRequestId || "");
+    expect(binaryBody).toMatchObject({ available: true, base64Encoded: true, text: "iVBORw0KGgoAAAANSUhEUg==" });
+    expect(formatNetworkBody(binaryBody)).toContain("Base64 response body");
+  });
+
+  it("decodes base64 request bodies for text-like content types", async () => {
+    const transport = new FakeNetworkTransport();
+    const manager = new NetworkManager();
+
+    await manager.attach(createSession(transport));
+
+    transport.emit({
+      method: "Network.requestWillBeSent",
+      params: {
+        requestId: "body-request",
+        timestamp: 1,
+        wallTime: 10,
+        type: "Fetch",
+        request: {
+          url: "https://example.test/form",
+          method: "POST",
+          headers: { "content-type": "application/json" },
+        },
+      },
+    });
+
+    const requestId = manager.list({ text: "/form" }).items[0]?.id;
+    expect(requestId).toBeDefined();
+
+    transport.requestPostDataResult = {
+      postData: Buffer.from('{"hello":"world"}', "utf8").toString("base64"),
+      base64Encoded: true,
+    };
+
+    const requestBody = await manager.getRequestBody(requestId || "");
+    expect(requestBody).toMatchObject({ available: true, base64Encoded: false, text: '{"hello":"world"}' });
+    expect(formatNetworkBody(requestBody)).toBe('{"hello":"world"}');
   });
 });
