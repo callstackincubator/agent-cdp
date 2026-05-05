@@ -81,55 +81,13 @@ Console messages are collected while the daemon is running with an active target
 
 ## Network inspection
 
-Compact, agent-friendly network inspection with a bounded live buffer and optional persisted sessions.
-
-After `target select`, the daemon starts an initial active network session automatically. That session appears in `network sessions` and can be stopped with `network stop`, just like a session created with `network start`.
+For network workflows, run:
 
 ```bash
-agent-cdp network status
-
-# Persisted recording session
-agent-cdp network start [--name NAME] [--preserve-across-navigation]
-# ... reproduce the interaction ...
-agent-cdp network stop
-
-# Inspect either a stored session or, if no session exists, the live rolling buffer
-agent-cdp network sessions [--limit N] [--offset N]
-agent-cdp network summary [--session ID]
-agent-cdp network list [--session ID] [--limit N] [--offset N] [--type TYPE] [--status STATUS] [--method METHOD] [--text TEXT] [--min-ms N] [--max-ms N] [--min-bytes N] [--max-bytes N]
-agent-cdp network request --id REQ_ID [--session ID]
-agent-cdp network request-headers --id REQ_ID [--session ID] [--name TEXT]
-agent-cdp network response-headers --id REQ_ID [--session ID] [--name TEXT]
-agent-cdp network request-body --id REQ_ID [--session ID] [--file PATH]
-agent-cdp network response-body --id REQ_ID [--session ID] [--file PATH]
+agent-cdp skills get network
 ```
 
-Recommended workflow:
-
-```bash
-agent-cdp network summary
-agent-cdp network list --status failed
-agent-cdp network request --id req_12
-agent-cdp network response-headers --id req_12
-agent-cdp network response-body --id req_12 --file ./response.txt
-```
-
-Behavior notes:
-- The live buffer keeps only the most recent `200` requests.
-- Selecting a target starts the initial active session automatically.
-- `network start` begins empty and does not backfill earlier live-buffer entries.
-- `network start` requires no active session. Stop the current session first if one is already running.
-- Without `--session`, queries prefer the active or latest persisted session; otherwise they use live data.
-- `network request` omits headers and bodies by default. Use the explicit follow-up commands for those.
-- `--preserve-across-navigation` applies only to persisted recording sessions.
-
-Current limitations:
-- CDP `Network.*` support varies by target.
-- There is no runtime-specific fallback instrumentation in v1.
-- Response and request bodies may be unavailable depending on target behavior or disconnect timing.
-- Binary bodies are often better exported with `--file`.
-- WebSocket support is handshake-only in v1.
-- No redaction, throttling, blocking, mocking, replay, or HAR export is included in v1.
+That skill contains session behavior, common workflows, body inspection guidance, and network-specific troubleshooting.
 
 ## Trace recording
 
