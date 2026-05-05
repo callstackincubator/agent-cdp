@@ -1,8 +1,8 @@
 import { SessionManager } from "../session-manager.js";
 import type { CdpEventMessage, CdpTransport, TargetDescriptor, TargetProvider } from "../types.js";
 
-const CHROME_TEST_ID = "chrome|ZXhhbXBsZS50ZXN0|page-1";
-const REACT_NATIVE_TEST_ID = "react-native|ZXhhbXBsZS50ZXN0|page-1";
+const CHROME_TEST_ID = "chrome:ZXhhbXBsZS50ZXN0:page-1";
+const REACT_NATIVE_TEST_ID = "react-native:ZXhhbXBsZS50ZXN0:page-1";
 
 class FakeTransport implements CdpTransport {
   connected = false;
@@ -105,7 +105,7 @@ describe("SessionManager", () => {
         this.attempt += 1;
         return [
           {
-            id: `react-native|ZXhhbXBsZS50ZXN0|page-${this.attempt}`,
+            id: `react-native:ZXhhbXBsZS50ZXN0:page-${this.attempt}`,
             rawId: `page-${this.attempt}`,
             title: "React Native Experimental",
             kind: "react-native",
@@ -135,7 +135,7 @@ describe("SessionManager", () => {
         attempt += 1;
         return Promise.resolve([
           {
-            id: `react-native|ZXhhbXBsZS50ZXN0|page-${attempt}`,
+            id: `react-native:ZXhhbXBsZS50ZXN0:page-${attempt}`,
             rawId: `page-${attempt}`,
             title: "React Native Experimental",
             kind: "react-native" as const,

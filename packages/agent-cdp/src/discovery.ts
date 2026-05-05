@@ -48,7 +48,7 @@ export function decodeTargetSource(source: string): string {
 }
 
 export function buildTargetId(kind: TargetDescriptor["kind"], sourceUrl: string, rawId: string): string {
-  return `${kind}|${encodeTargetSource(sourceUrl)}|${rawId}`;
+  return `${kind}:${encodeTargetSource(sourceUrl)}:${rawId}`;
 }
 
 export function parseTargetId(id: string): {
@@ -57,8 +57,8 @@ export function parseTargetId(id: string): {
   rawId: string;
   sourceUrl: string;
 } {
-  const firstSeparator = id.indexOf("|");
-  const secondSeparator = id.indexOf("|", firstSeparator + 1);
+  const firstSeparator = id.indexOf(":");
+  const secondSeparator = id.indexOf(":", firstSeparator + 1);
   if (firstSeparator <= 0 || secondSeparator <= firstSeparator + 1 || secondSeparator === id.length - 1) {
     throw new Error(`Invalid target id: ${id}`);
   }

@@ -9,8 +9,8 @@ describe("cli", () => {
         url: "http://127.0.0.1:9222",
       },
     });
-    expect(parseArgs(["target", "select", "chrome|MTI3LjAuMC4xOjkyMjI|page-1"])).toEqual({
-      command: ["target", "select", "chrome|MTI3LjAuMC4xOjkyMjI|page-1"],
+    expect(parseArgs(["target", "select", "chrome:MTI3LjAuMC4xOjkyMjI:page-1"])).toEqual({
+      command: ["target", "select", "chrome:MTI3LjAuMC4xOjkyMjI:page-1"],
       flags: {},
     });
   });

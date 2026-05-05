@@ -14,7 +14,7 @@ import {
 describe("discovery helpers", () => {
   it("builds deterministic target ids", () => {
     expect(buildTargetId("chrome", "http://127.0.0.1:9222", "page-1")).toBe(
-      "chrome|MTI3LjAuMC4xOjkyMjI|page-1",
+      "chrome:MTI3LjAuMC4xOjkyMjI:page-1",
     );
   });
 
@@ -29,7 +29,7 @@ describe("discovery helpers", () => {
   });
 
   it("parses target ids back to their source url", () => {
-    expect(parseTargetId("chrome|MTI3LjAuMC4xOjkyMjI|page-1")).toEqual({
+    expect(parseTargetId("chrome:MTI3LjAuMC4xOjkyMjI:page-1")).toEqual({
       kind: "chrome",
       encodedSource: "MTI3LjAuMC4xOjkyMjI",
       rawId: "page-1",
@@ -54,7 +54,7 @@ describe("discovery helpers", () => {
         webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/1",
       }),
     ).toMatchObject({
-      id: "chrome|MTI3LjAuMC4xOjkyMjI|page-1",
+      id: "chrome:MTI3LjAuMC4xOjkyMjI:page-1",
       rawId: "page-1",
       kind: "chrome",
       title: "Example",
@@ -76,7 +76,7 @@ describe("discovery helpers", () => {
         },
       }),
     ).toMatchObject({
-      id: "react-native|MTI3LjAuMC4xOjgwODE|device-page",
+      id: "react-native:MTI3LjAuMC4xOjgwODE:device-page",
       kind: "react-native",
       appId: "com.example.app",
       reactNative: {
@@ -117,8 +117,8 @@ describe("discovery helpers", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(discoverTargets({})).resolves.toMatchObject([
-      { id: "chrome|MTI3LjAuMC4xOjkyMjI|page-1", kind: "chrome" },
-      { id: "react-native|MTI3LjAuMC4xOjgwODE|device-page", kind: "react-native" },
+      { id: "chrome:MTI3LjAuMC4xOjkyMjI:page-1", kind: "chrome" },
+      { id: "react-native:MTI3LjAuMC4xOjgwODE:device-page", kind: "react-native" },
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
