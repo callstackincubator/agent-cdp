@@ -95,6 +95,33 @@ export type IpcCommand =
   | { type: "clear-target" }
   | { type: "list-console-messages"; limit?: number }
   | { type: "get-console-message"; id: number }
+  | { type: "network-status" }
+  | { type: "network-start"; name?: string; preserveAcrossNavigation?: boolean }
+  | { type: "network-stop" }
+  | { type: "network-list-sessions"; limit?: number; offset?: number }
+  | {
+      type: "network-summary";
+      sessionId?: string;
+    }
+  | {
+      type: "network-list";
+      sessionId?: string;
+      limit?: number;
+      offset?: number;
+      resourceType?: string;
+      status?: string;
+      method?: string;
+      text?: string;
+      minMs?: number;
+      maxMs?: number;
+      minBytes?: number;
+      maxBytes?: number;
+    }
+  | { type: "network-request"; requestId: string; sessionId?: string }
+  | { type: "network-request-headers"; requestId: string; sessionId?: string; name?: string }
+  | { type: "network-response-headers"; requestId: string; sessionId?: string; name?: string }
+  | { type: "network-request-body"; requestId: string; sessionId?: string; filePath?: string }
+  | { type: "network-response-body"; requestId: string; sessionId?: string; filePath?: string }
   | { type: "start-trace" }
   | { type: "stop-trace"; filePath?: string }
   | { type: "capture-memory"; filePath: string }
