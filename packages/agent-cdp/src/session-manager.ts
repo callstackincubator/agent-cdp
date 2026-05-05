@@ -38,9 +38,9 @@ export class SessionManager {
   }
 
   async selectTarget(targetId: string, options: DiscoveryOptions): Promise<TargetDescriptor> {
-    const resolvedOptions = this.resolveSelectionOptions(targetId, options);
-    const targets = await this.listTargets(resolvedOptions);
-    const target = targets.find((candidate) => candidate.id === targetId);
+    const selection = this.resolveSelection(targetId, options);
+    const targets = await this.listTargets(selection.options);
+    const target = targets.find(selection.matchesTarget);
     if (!target) {
       throw new Error(`Target not found: ${targetId}`);
     }
@@ -59,7 +59,7 @@ export class SessionManager {
       await session.ensureConnected();
       this.session = session;
       this.sessionState = "connected";
-      this.selectedOptions = resolvedOptions;
+      this.selectedOptions = selection.options;
       return target;
     } catch (error) {
       this.sessionState = "disconnected";
@@ -151,19 +151,67 @@ export class SessionManager {
     );
   }
 
-  private resolveSelectionOptions(targetId: string, options: DiscoveryOptions): DiscoveryOptions {
-    const parsedTarget = parseTargetId(targetId);
-    const resolvedUrl = parsedTarget.sourceUrl;
+  private resolveSelection(
+    targetId: string,
+    options: DiscoveryOptions,
+  ): {
+    options: DiscoveryOptions;
+    matchesTarget: (candidate: TargetDescriptor) => boolean;
+  } {
+    try {
+      const parsedTarget = parseTargetId(targetId);
+      const resolvedUrl = parsedTarget.sourceUrl;
 
-    if (!options.url) {
-      return { url: resolvedUrl };
+      if (!options.url) {
+        return {
+          options: { url: resolvedUrl },
+          matchesTarget: (candidate) => candidate.id === targetId,
+        };
+      }
+
+      const normalizedOptionUrl = normalizeDiscoveryUrl(options.url);
+      if (normalizedOptionUrl !== resolvedUrl) {
+        throw new Error(`Target id source does not match --url: ${targetId}`);
+      }
+
+      return {
+        options: { url: normalizedOptionUrl },
+        matchesTarget: (candidate) => candidate.id === targetId,
+      };
+    } catch (error) {
+      if (!options.url) {
+        throw error;
+      }
+
+      const legacyTarget = this.parseLegacyTargetId(targetId);
+      if (!legacyTarget) {
+        throw error;
+      }
+
+      return {
+        options: { url: normalizeDiscoveryUrl(options.url) },
+        matchesTarget: (candidate) => candidate.kind === legacyTarget.kind && candidate.rawId === legacyTarget.rawId,
+      };
+    }
+  }
+
+  private parseLegacyTargetId(targetId: string): {
+    kind: TargetDescriptor["kind"];
+    rawId: string;
+  } | null {
+    const separator = targetId.indexOf(":");
+    if (separator <= 0 || separator === targetId.length - 1 || targetId.indexOf(":", separator + 1) !== -1) {
+      return null;
     }
 
-    const normalizedOptionUrl = normalizeDiscoveryUrl(options.url);
-    if (normalizedOptionUrl !== resolvedUrl) {
-      throw new Error(`Target id source does not match --url: ${targetId}`);
+    const kind = targetId.slice(0, separator);
+    if (kind !== "chrome" && kind !== "react-native") {
+      return null;
     }
 
-    return { url: normalizedOptionUrl };
+    return {
+      kind,
+      rawId: targetId.slice(separator + 1),
+    };
   }
 }

@@ -3,6 +3,7 @@ import type { CdpEventMessage, CdpTransport, TargetDescriptor, TargetProvider } 
 
 const CHROME_TEST_ID = "chrome:ZXhhbXBsZS50ZXN0:page-1";
 const REACT_NATIVE_TEST_ID = "react-native:ZXhhbXBsZS50ZXN0:page-1";
+const LEGACY_CHROME_TEST_ID = "chrome:page-1";
 
 class FakeTransport implements CdpTransport {
   connected = false;
@@ -94,6 +95,26 @@ describe("SessionManager", () => {
     await expect(manager.selectTarget(CHROME_TEST_ID, { url: "http://other.test" })).rejects.toThrow(
       `Target id source does not match --url: ${CHROME_TEST_ID}`,
     );
+  });
+
+  it("selects targets with legacy ids when an explicit url is provided", async () => {
+    const targets = [
+      {
+        id: CHROME_TEST_ID,
+        rawId: "page-1",
+        title: "Example",
+        kind: "chrome" as const,
+        description: "Test page",
+        webSocketDebuggerUrl: "ws://example.test/devtools/page/1",
+        sourceUrl: "http://example.test",
+      },
+    ];
+    const manager = new SessionManager([new FakeProvider()], () => Promise.resolve(targets));
+
+    await expect(manager.selectTarget(LEGACY_CHROME_TEST_ID, { url: "example.test" })).resolves.toMatchObject({
+      id: CHROME_TEST_ID,
+      title: "Example",
+    });
   });
 
   it("reconnects react native targets by logical device id", async () => {
