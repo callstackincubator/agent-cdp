@@ -13,6 +13,7 @@ import { createTargetProviders } from "./providers.js";
 import { SessionManager } from "./session-manager.js";
 import { TraceRecorder } from "./trace.js";
 import type { DaemonInfo, IpcCommand, IpcResponse, StatusInfo } from "./types.js";
+import { getPackageVersion } from "./version.js";
 
 const STATE_DIR = path.join(process.env.HOME || process.env.USERPROFILE || "/tmp", ".agent-cdp");
 
@@ -74,6 +75,7 @@ class Daemon {
       pid: process.pid,
       socketPath,
       startedAt: this.startedAt,
+      version: getPackageVersion(),
       buildMtime,
     };
 

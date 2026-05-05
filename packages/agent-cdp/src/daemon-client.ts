@@ -4,6 +4,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 
 import type { DaemonInfo, IpcCommand, IpcResponse } from "./types.js";
+import { getPackageVersion } from "./version.js";
 
 const STATE_DIR = path.join(process.env.HOME || process.env.USERPROFILE || "/tmp", ".agent-cdp");
 
@@ -33,12 +34,23 @@ function isDaemonAlive(info: DaemonInfo): boolean {
   }
 }
 
-export async function ensureDaemon(): Promise<void> {
-  const info = readDaemonInfo();
-  if (info && isDaemonAlive(info)) {
-    return;
+export function getRequiredDaemonAction(
+  info: DaemonInfo | null,
+  currentVersion: string,
+  daemonAlive = info ? isDaemonAlive(info) : false,
+): "reuse" | "restart" | "start" {
+  if (!info || !daemonAlive) {
+    return "start";
   }
 
+  if (info.version !== currentVersion) {
+    return "restart";
+  }
+
+  return "reuse";
+}
+
+function cleanupDaemonState(): void {
   try {
     fs.unlinkSync(getDaemonInfoPath());
   } catch {}
@@ -46,6 +58,30 @@ export async function ensureDaemon(): Promise<void> {
   try {
     fs.unlinkSync(getSocketPath());
   } catch {}
+}
+
+async function waitForDaemonExit(pid: number, timeoutMs = 5_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(pid, 0);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    } catch {
+      return;
+    }
+  }
+
+  throw new Error("Daemon failed to stop within 5 seconds");
+}
+
+async function stopDaemonProcess(info: DaemonInfo): Promise<void> {
+  process.kill(info.pid, "SIGTERM");
+  await waitForDaemonExit(info.pid);
+  cleanupDaemonState();
+}
+
+async function startDaemon(): Promise<void> {
+  cleanupDaemonState();
 
   const daemonScript = path.join(path.dirname(new URL(import.meta.url).pathname), "daemon.js");
   const child = spawn(process.execPath, [daemonScript], {
@@ -66,19 +102,33 @@ export async function ensureDaemon(): Promise<void> {
   throw new Error("Daemon failed to start within 5 seconds");
 }
 
-export function stopDaemon(): boolean {
+export async function ensureDaemon(): Promise<void> {
+  const info = readDaemonInfo();
+  const action = getRequiredDaemonAction(info, getPackageVersion());
+  if (action === "reuse") {
+    return;
+  }
+
+  if (action === "restart" && info) {
+    await stopDaemonProcess(info);
+  } else {
+    cleanupDaemonState();
+  }
+
+  await startDaemon();
+}
+
+export async function stopDaemon(): Promise<boolean> {
   const info = readDaemonInfo();
   if (!info) {
     return false;
   }
 
   try {
-    process.kill(info.pid, "SIGTERM");
-    try {
-      fs.unlinkSync(getDaemonInfoPath());
-    } catch {}
+    await stopDaemonProcess(info);
     return true;
   } catch {
+    cleanupDaemonState();
     return false;
   }
 }
