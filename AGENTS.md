@@ -32,6 +32,7 @@ Minimal operating guide for AI coding agents in this repo.
 - Minimum code that solves the problem.
 - No speculative features.
 - No new abstraction for one call site.
+- Organize code into feature modules so code responsible for similar behavior stays local.
 - Match existing style and naming.
 - Remove unused imports or variables introduced by your change only.
 - Prefer type-level guarantees over duplicate runtime tests when TypeScript already proves the contract.
