@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
-import { ensureDaemon, readDaemonInfo, sendCommand, stopDaemon } from "./daemon-client.js";
+import { ensureDaemon, sendCommand, stopDaemon } from "./daemon-client.js";
 import {
   formatConsoleList,
   formatConsoleMessage,
@@ -273,17 +273,12 @@ export async function main(): Promise<void> {
   }
 
   if (cmd === "stop") {
-    console.log(stopDaemon() ? "Daemon stopped" : "Daemon is not running");
+    console.log((await stopDaemon()) ? "Daemon stopped" : "Daemon is not running");
     return;
   }
 
   if (cmd === "status") {
-    const info = readDaemonInfo();
-    if (!info) {
-      console.log("Daemon is not running");
-      process.exit(1);
-    }
-
+    await ensureDaemon();
     const response = await sendCommand({ type: "status" });
     if (!response.ok) {
       throw new Error(response.error || "Failed to load daemon status");

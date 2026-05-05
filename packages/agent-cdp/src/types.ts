@@ -74,6 +74,7 @@ export interface DaemonInfo {
   pid: number;
   socketPath: string;
   startedAt: number;
+  version?: string;
   buildMtime?: number;
 }
 
