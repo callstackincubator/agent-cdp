@@ -35,7 +35,7 @@ export function shouldReattachConsoleCollector(
 
 export function getConnectionErrorMessage(selectedTarget: { id: string } | null): string {
   if (!selectedTarget) {
-    return "No target selected. Use `target select` first.";
+    return "No target available. Use `target list` to find one, then `target select <id>`.";
   }
 
   return `Target ${selectedTarget.id} is not connected. Reconnect the app and try again.`;
