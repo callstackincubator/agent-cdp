@@ -91,3 +91,19 @@ agent-cdp target list --url http://localhost:8081
 ```
 
 Then select the target and inspect runtime state.
+
+## React Native / Hermes promises
+
+On React Native targets backed by Hermes, do not assume `runtime eval --await` will unwrap a promise into its fulfillment value.
+
+Some Hermes targets also reject `async`/`await` syntax at parse time, so avoid using async functions as a probe unless you have already confirmed the target accepts them.
+
+If `--await` returns a promise handle instead of the resolved value:
+
+1. Re-run `runtime eval` without `--await` to get the remote object handle.
+2. Inspect the handle with `runtime props --id <OBJECT_ID> --own`.
+3. Look for Hermes promise internals such as `_h`, `_i`, `_j`, and `_k`.
+4. In practice, `_j` often holds the fulfilled value once the promise settles, while `_k` may be `null`.
+5. If you only need to confirm settlement, treat a non-null `_j` as the most useful clue and avoid assuming the inspector will serialize the resolved value for you.
+
+Use this workflow for debugging RN promise state instead of relying on native async syntax or promise unwrapping in the inspector path.
