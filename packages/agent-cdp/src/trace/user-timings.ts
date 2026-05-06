@@ -28,7 +28,10 @@ const RESOURCE_TIMING_NAMES = new Set([
   "loadEventEnd",
 ]);
 
-export function buildTraceEntries(events: RawTraceEvent[]): { entries: TraceEntry[]; tracks: TraceTrack[]; durationMs: number } {
+export function buildTraceEntries(
+  events: RawTraceEvent[],
+  originTs: number,
+): { entries: TraceEntry[]; tracks: TraceTrack[]; durationMs: number } {
   const entries: TraceEntry[] = [];
   const asyncStarts = new Map<string, RawTraceEvent>();
   const namedTimestamps = new Map<string, RawTraceEvent>();
@@ -41,7 +44,7 @@ export function buildTraceEntries(events: RawTraceEvent[]): { entries: TraceEntr
         continue;
       }
 
-      const completeEntry = createPerformanceTimingEntry(event, nextEntryId);
+      const completeEntry = createPerformanceTimingEntry(event, nextEntryId, originTs);
       if (completeEntry) {
         entries.push(completeEntry.entry);
         nextEntryId = completeEntry.nextEntryId;
@@ -64,7 +67,7 @@ export function buildTraceEntries(events: RawTraceEvent[]): { entries: TraceEntr
           continue;
         }
         asyncStarts.delete(asyncKey);
-        const entry = createPairedPerformanceMeasure(start, event, nextEntryId++);
+        const entry = createPairedPerformanceMeasure(start, event, nextEntryId++, originTs);
         if (entry) {
           entries.push(entry);
         }
@@ -72,8 +75,8 @@ export function buildTraceEntries(events: RawTraceEvent[]): { entries: TraceEntr
       continue;
     }
 
-    if (category === "blink.console") {
-      const entry = createConsoleTimestampEntry(event, namedTimestamps, nextEntryId);
+    if (category === "blink.console" || (category === "devtools.timeline" && event.name === "TimeStamp")) {
+      const entry = createConsoleTimestampEntry(event, namedTimestamps, nextEntryId, originTs);
       if (entry) {
         entries.push(entry.entry);
         nextEntryId = entry.nextEntryId;
@@ -100,7 +103,11 @@ export function buildTraceEntries(events: RawTraceEvent[]): { entries: TraceEntr
   return { entries: sortedEntries, tracks, durationMs };
 }
 
-function createPerformanceTimingEntry(event: RawTraceEvent, nextEntryId: number): { entry: TraceEntry; nextEntryId: number } | null {
+function createPerformanceTimingEntry(
+  event: RawTraceEvent,
+  nextEntryId: number,
+  originTs: number,
+): { entry: TraceEntry; nextEntryId: number } | null {
   const phase = typeof event.ph === "string" ? event.ph : "";
   const hasDuration = typeof event.dur === "number" || phase === "X";
   const isInstant = phase === "I" || phase === "R" || phase === "i" || (!hasDuration && event.name === "performance.mark");
@@ -122,7 +129,7 @@ function createPerformanceTimingEntry(event: RawTraceEvent, nextEntryId: number)
       track,
       trackKind: devtools?.track ? "custom" : "default",
       trackGroup: devtools?.trackGroup,
-      startMs: microToMs(event.ts),
+      startMs: timestampToMs(event.ts, originTs),
       durationMs: hasDuration ? microToMs(event.dur) : 0,
       color: devtools?.color,
       tooltipText: devtools?.tooltipText,
@@ -134,12 +141,20 @@ function createPerformanceTimingEntry(event: RawTraceEvent, nextEntryId: number)
   };
 }
 
-function createPairedPerformanceMeasure(start: RawTraceEvent, end: RawTraceEvent, nextEntryId: number): TraceEntry | null {
+function createPairedPerformanceMeasure(
+  start: RawTraceEvent,
+  end: RawTraceEvent,
+  nextEntryId: number,
+  originTs: number,
+): TraceEntry | null {
   if (typeof start.ts !== "number" || typeof end.ts !== "number" || end.ts < start.ts) {
     return null;
   }
 
-  const { devtools, userDetail } = parsePerformanceExtensionData(end);
+  const endData = parsePerformanceExtensionData(end);
+  const startData = parsePerformanceExtensionData(start);
+  const devtools = endData.devtools ?? startData.devtools;
+  const userDetail = endData.userDetail ?? startData.userDetail;
   return {
     entryId: `te_${nextEntryId}`,
     type: "measure",
@@ -148,7 +163,7 @@ function createPairedPerformanceMeasure(start: RawTraceEvent, end: RawTraceEvent
     track: devtools?.track || DEFAULT_TRACK,
     trackKind: devtools?.track ? "custom" : "default",
     trackGroup: devtools?.trackGroup,
-    startMs: microToMs(start.ts),
+    startMs: timestampToMs(start.ts, originTs),
     durationMs: microToMs(end.ts - start.ts),
     color: devtools?.color,
     tooltipText: devtools?.tooltipText,
@@ -162,6 +177,7 @@ function createConsoleTimestampEntry(
   event: RawTraceEvent,
   namedTimestamps: Map<string, RawTraceEvent>,
   nextEntryId: number,
+  originTs: number,
 ): { entry: TraceEntry; nextEntryId: number } | null {
   const data = event.args?.data;
   if (!isRecord(data) || typeof event.ts !== "number") {
@@ -170,9 +186,9 @@ function createConsoleTimestampEntry(
 
   namedTimestamps.set(readConsoleTimestampName(data), event);
   const { devtools, userDetail } = parseConsoleExtensionData(event);
-  const startTs = resolveConsoleTimestampBoundary(data.start, namedTimestamps) ?? event.ts;
-  const endTs = resolveConsoleTimestampBoundary(data.end, namedTimestamps) ?? event.ts;
-  const startMs = microToMs(startTs);
+  const startTs = resolveConsoleTimestampBoundary(data.start, namedTimestamps, event.ts) ?? event.ts;
+  const endTs = resolveConsoleTimestampBoundary(data.end, namedTimestamps, event.ts) ?? event.ts;
+  const startMs = timestampToMs(startTs, originTs);
   const durationMs = Math.max(0, microToMs(endTs - startTs));
 
   return {
@@ -207,6 +223,7 @@ function buildTracks(entries: TraceEntry[]): TraceTrack[] {
       existing.measureCount += entry.type === "measure" ? 1 : 0;
       existing.markCount += entry.type === "mark" ? 1 : 0;
       existing.stampCount += entry.type === "stamp" ? 1 : 0;
+      existing.activeMs += entry.durationMs;
       existing.startMs = Math.min(existing.startMs, entry.startMs);
       existing.endMs = Math.max(existing.endMs, entry.startMs + entry.durationMs);
       continue;
@@ -221,6 +238,7 @@ function buildTracks(entries: TraceEntry[]): TraceTrack[] {
       measureCount: entry.type === "measure" ? 1 : 0,
       markCount: entry.type === "mark" ? 1 : 0,
       stampCount: entry.type === "stamp" ? 1 : 0,
+      activeMs: entry.durationMs,
       startMs: entry.startMs,
       endMs: entry.startMs + entry.durationMs,
     });
@@ -267,9 +285,13 @@ function readConsoleTimestampName(data: Record<string, unknown>): string {
 function resolveConsoleTimestampBoundary(
   boundary: unknown,
   namedTimestamps: Map<string, RawTraceEvent>,
+  eventTs: number,
 ): number | undefined {
   if (typeof boundary === "number") {
-    return boundary * 1000;
+    if (boundary >= 0 && boundary < 1000) {
+      return eventTs;
+    }
+    return boundary;
   }
   if (typeof boundary === "string") {
     return namedTimestamps.get(boundary)?.ts;
@@ -279,6 +301,10 @@ function resolveConsoleTimestampBoundary(
 
 function microToMs(value: unknown): number {
   return typeof value === "number" ? Math.round((value / 1000) * 1000) / 1000 : 0;
+}
+
+function timestampToMs(value: unknown, originTs: number): number {
+  return typeof value === "number" ? microToMs(value - originTs) : 0;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

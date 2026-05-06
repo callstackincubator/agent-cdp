@@ -81,11 +81,11 @@ export function formatTraceTracks(result: TraceTracksResult, verbose = false): s
   if (result.items.length === 0) return "No trace tracks";
   return result.items
     .map((track) => {
-      const base = `${track.name}  ${track.kind}  ${track.entryCount} entries  ${formatMs(track.endMs - track.startMs)}`;
+      const base = `${track.name}  ${track.kind}  ${track.entryCount} entries  ${formatMs(track.activeMs)}`;
       if (!verbose) {
         return track.group ? `${base}  ${track.group}` : base;
       }
-      return `${base}  measures:${track.measureCount} marks:${track.markCount} stamps:${track.stampCount}` +
+      return `${base}  span:${formatMs(track.endMs - track.startMs)}  measures:${track.measureCount} marks:${track.markCount} stamps:${track.stampCount}` +
         (track.group ? `  group:${track.group}` : "");
     })
     .join("\n");

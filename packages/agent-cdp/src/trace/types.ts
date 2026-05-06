@@ -42,6 +42,7 @@ export interface TraceTrack {
   measureCount: number;
   markCount: number;
   stampCount: number;
+  activeMs: number;
   startMs: number;
   endMs: number;
 }

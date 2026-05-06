@@ -49,13 +49,20 @@ export function parseConsoleExtensionData(event: RawTraceEvent): ParsedExtension
   };
 }
 
-function readPerformanceDetail(event: RawTraceEvent): string | null {
-  const data = event.args?.data;
+function readPerformanceDetail(event: RawTraceEvent): string | Record<string, unknown> | null {
+  const args = event.args;
+  if (isRecord(args)) {
+    if (typeof args.detail === "string" || isRecord(args.detail)) {
+      return args.detail;
+    }
+  }
+
+  const data = args?.data;
   if (!isRecord(data)) {
     return null;
   }
 
-  if (typeof data.detail === "string") {
+  if (typeof data.detail === "string" || isRecord(data.detail)) {
     return data.detail;
   }
 
@@ -64,17 +71,17 @@ function readPerformanceDetail(event: RawTraceEvent): string | null {
     return null;
   }
 
-  const args = beginEvent.args;
-  if (!isRecord(args) || typeof args.detail !== "string") {
+  const beginArgs = beginEvent.args;
+  if (!isRecord(beginArgs) || (typeof beginArgs.detail !== "string" && !isRecord(beginArgs.detail))) {
     return null;
   }
 
-  return args.detail;
+  return beginArgs.detail;
 }
 
-function parseDetailPayload(detail: string): ParsedExtensionData {
+function parseDetailPayload(detail: string | Record<string, unknown>): ParsedExtensionData {
   try {
-    const parsed = JSON.parse(detail);
+    const parsed = typeof detail === "string" ? JSON.parse(detail) : detail;
     if (!isRecord(parsed)) {
       return { devtools: null, userDetail: null };
     }

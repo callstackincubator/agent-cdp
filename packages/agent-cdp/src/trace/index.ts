@@ -34,8 +34,8 @@ export class TraceManager {
   async stop(filePath?: string): Promise<TraceStopResult> {
     const recording = await this.recorder.stop(filePath);
     const sessionId = this.store.generateId();
-    const normalizedEvents = normalizeTraceEvents(recording.events);
-    const analyzed = buildTraceEntries(normalizedEvents);
+    const normalizedTrace = normalizeTraceEvents(recording.events);
+    const analyzed = buildTraceEntries(normalizedTrace.events, normalizedTrace.originTs);
     const session: TraceSession = {
       sessionId,
       name: `trace-${sessionId}`,
