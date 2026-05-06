@@ -2,6 +2,7 @@ import {
   buildTargetId,
   decodeTargetSource,
   DEFAULT_DISCOVERY_URLS,
+  dedupeReactNativeTargets,
   discoverTargets,
   encodeTargetSource,
   getDiscoveryUrl,
@@ -83,6 +84,50 @@ describe("discovery helpers", () => {
         logicalDeviceId: "device-1",
       },
     });
+  });
+
+  it("keeps only the newest react native target when ids differ only by numeric suffix", () => {
+    expect(
+      dedupeReactNativeTargets([
+        {
+          id: "react-native:MTI3LjAuMC4xOjgwODE:device-1-1",
+          rawId: "device-1-1",
+          title: "Expo",
+          kind: "react-native",
+          description: "React Native Bridgeless [C++ connection]",
+          appId: "host.exp.Exponent",
+          webSocketDebuggerUrl: "ws://127.0.0.1:8081/inspector/debug?device=device-1&page=1",
+          sourceUrl: "http://127.0.0.1:8081",
+          reactNative: {
+            logicalDeviceId: "device-1",
+            capabilities: {
+              nativePageReloads: true,
+            },
+          },
+        },
+        {
+          id: "react-native:MTI3LjAuMC4xOjgwODE:device-1-2",
+          rawId: "device-1-2",
+          title: "Expo",
+          kind: "react-native",
+          description: "React Native Bridgeless [C++ connection]",
+          appId: "host.exp.Exponent",
+          webSocketDebuggerUrl: "ws://127.0.0.1:8081/inspector/debug?device=device-1&page=2",
+          sourceUrl: "http://127.0.0.1:8081",
+          reactNative: {
+            logicalDeviceId: "device-1",
+            capabilities: {
+              nativePageReloads: true,
+            },
+          },
+        },
+      ]),
+    ).toMatchObject([
+      {
+        rawId: "device-1-2",
+        webSocketDebuggerUrl: "ws://127.0.0.1:8081/inspector/debug?device=device-1&page=2",
+      },
+    ]);
   });
 
   it("keeps ids unique across different source urls", () => {

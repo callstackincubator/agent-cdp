@@ -137,6 +137,39 @@ export function mapReactNativeTarget(sourceUrl: string, target: ReactNativeJsonT
   };
 }
 
+function getReactNativeDuplicateKey(target: TargetDescriptor): string | null {
+  if (target.kind !== "react-native") {
+    return null;
+  }
+
+  const logicalDeviceId = target.reactNative?.logicalDeviceId;
+  if (!logicalDeviceId) {
+    return null;
+  }
+
+  const duplicateSuffix = target.rawId.slice(logicalDeviceId.length + 1);
+  if (!target.rawId.startsWith(`${logicalDeviceId}-`) || !/^\d+$/.test(duplicateSuffix)) {
+    return null;
+  }
+
+  return [target.sourceUrl, target.appId || "", logicalDeviceId].join("::");
+}
+
+export function dedupeReactNativeTargets(targets: TargetDescriptor[]): TargetDescriptor[] {
+  const deduped = new Map<string, TargetDescriptor>();
+
+  for (const target of targets) {
+    const duplicateKey = getReactNativeDuplicateKey(target);
+    const mapKey = duplicateKey || target.id;
+    if (duplicateKey) {
+      deduped.delete(mapKey);
+    }
+    deduped.set(mapKey, target);
+  }
+
+  return [...deduped.values()];
+}
+
 export async function fetchJsonTargets<T>(baseUrl: string): Promise<T[]> {
   const response = await fetch(`${normalizeBaseUrl(baseUrl)}/json/list`);
   if (!response.ok) {
@@ -150,33 +183,37 @@ export async function discoverTargets(options: DiscoveryOptions): Promise<Target
   const urls = getDiscoveryUrls(options);
   if (options.url) {
     const targets = await fetchJsonTargets<ReactNativeJsonTarget>(urls[0]);
-    return targets
-      .map((target) => {
-        if (target.reactNative) {
-          return mapReactNativeTarget(urls[0], target);
-        }
+    return dedupeReactNativeTargets(
+      targets
+        .map((target) => {
+          if (target.reactNative) {
+            return mapReactNativeTarget(urls[0], target);
+          }
 
-        return mapChromeTarget(urls[0], target);
-      })
-      .filter((target): target is TargetDescriptor => target !== null);
+          return mapChromeTarget(urls[0], target);
+        })
+        .filter((target): target is TargetDescriptor => target !== null),
+    );
   }
 
   const results = await Promise.allSettled(urls.map((url) => fetchJsonTargets<ReactNativeJsonTarget>(url)));
 
-  return results.flatMap((result, index) => {
-    if (result.status !== "fulfilled") {
-      return [];
-    }
+  return dedupeReactNativeTargets(
+    results.flatMap((result, index) => {
+      if (result.status !== "fulfilled") {
+        return [];
+      }
 
-    const url = urls[index];
-    return result.value
-      .map((target) => {
-        if (target.reactNative) {
-          return mapReactNativeTarget(url, target);
-        }
+      const url = urls[index];
+      return result.value
+        .map((target) => {
+          if (target.reactNative) {
+            return mapReactNativeTarget(url, target);
+          }
 
-        return mapChromeTarget(url, target);
-      })
-      .filter((target): target is TargetDescriptor => target !== null);
-  });
+          return mapChromeTarget(url, target);
+        })
+        .filter((target): target is TargetDescriptor => target !== null);
+    }),
+  );
 }
