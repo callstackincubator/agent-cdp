@@ -23,6 +23,8 @@ describe("cli", () => {
     expect(usage()).toContain("target select <id> [--url URL]");
     expect(usage()).toContain("network start [--name NAME] [--preserve-across-navigation]");
     expect(usage()).toContain("network response-body --id REQ_ID [--session ID] [--file PATH]");
+    expect(usage()).toContain("trace status");
+    expect(usage()).toContain("trace entries [--session ID] [--track NAME]");
     expect(usage()).toContain("js-allocation start");
     expect(usage()).toContain("js-allocation-timeline start");
   });

@@ -12,7 +12,7 @@ import { MemorySnapshotter } from "./memory.js";
 import { NetworkManager } from "./network/index.js";
 import { createTargetProviders } from "./providers.js";
 import { SessionManager } from "./session-manager.js";
-import { TraceRecorder } from "./trace.js";
+import { TraceManager } from "./trace/index.js";
 import type { DaemonInfo, IpcCommand, IpcResponse, StatusInfo } from "./types.js";
 import { getPackageVersion } from "./version.js";
 
@@ -52,7 +52,7 @@ class Daemon {
   private readonly jsHeapUsageMonitor = new JsHeapUsageMonitor();
   private readonly providers = createTargetProviders();
   private readonly sessionManager = new SessionManager(this.providers);
-  private readonly traceRecorder = new TraceRecorder();
+  private readonly traceManager = new TraceManager();
   private readonly jsProfiler = new JsProfiler();
   private ipcServer: net.Server | null = null;
 
@@ -261,12 +261,58 @@ class Daemon {
 
       if (command.type === "start-trace") {
         const session = await this.requireSession();
-        await this.traceRecorder.start(session);
+        await this.traceManager.start(session);
         return { ok: true, data: "Trace started" };
       }
 
       if (command.type === "stop-trace") {
-        return { ok: true, data: await this.traceRecorder.stop(command.filePath) };
+        return { ok: true, data: await this.traceManager.stop(command.filePath) };
+      }
+
+      if (command.type === "trace-status") {
+        return { ok: true, data: this.traceManager.getStatus() };
+      }
+
+      if (command.type === "trace-list-sessions") {
+        return { ok: true, data: this.traceManager.listSessions(command.limit, command.offset) };
+      }
+
+      if (command.type === "trace-summary") {
+        return { ok: true, data: this.traceManager.getSummary(command.sessionId) };
+      }
+
+      if (command.type === "trace-tracks") {
+        return {
+          ok: true,
+          data: this.traceManager.getTracks({
+            sessionId: command.sessionId,
+            limit: command.limit,
+            offset: command.offset,
+            text: command.text,
+            group: command.group,
+          }),
+        };
+      }
+
+      if (command.type === "trace-entries") {
+        return {
+          ok: true,
+          data: this.traceManager.getEntries({
+            sessionId: command.sessionId,
+            track: command.track,
+            type: command.typeFilter,
+            text: command.text,
+            startMs: command.startMs,
+            endMs: command.endMs,
+            limit: command.limit,
+            offset: command.offset,
+            sortBy: command.sortBy,
+          }),
+        };
+      }
+
+      if (command.type === "trace-entry") {
+        return { ok: true, data: this.traceManager.getEntry(command.entryId, command.sessionId) };
       }
 
       if (command.type === "capture-memory") {
@@ -613,7 +659,7 @@ class Daemon {
         selectedTarget: this.sessionManager.getSelectedTarget(),
         providerCount: this.providers.length,
         sessionState: this.sessionManager.getSessionState(),
-        tracingActive: this.traceRecorder.isActive(),
+        tracingActive: this.traceManager.isActive(),
       };
 
       return { ok: true, data: status };

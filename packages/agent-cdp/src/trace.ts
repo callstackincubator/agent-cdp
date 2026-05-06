@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import type { CdpEventMessage, RuntimeSession, TraceRecordingSummary } from "./types.js";
+import type { CdpEventMessage, RuntimeSession } from "./types.js";
+import type { RawTraceEvent } from "./trace/types.js";
 
 const TRACE_CATEGORIES = [
   "-*",
@@ -18,11 +19,20 @@ const TRACE_CATEGORIES = [
 ];
 
 interface ActiveTrace {
-  events: unknown[];
+  events: RawTraceEvent[];
   session: RuntimeSession;
   unsubscribe: () => void;
   resolveCompletion: () => void;
   completion: Promise<void>;
+  startedAt: number;
+}
+
+export interface TraceRecordingResult {
+  eventCount: number;
+  filePath?: string;
+  startedAt: number;
+  stoppedAt: number;
+  events: RawTraceEvent[];
 }
 
 export class TraceRecorder {
@@ -48,6 +58,7 @@ export class TraceRecorder {
       unsubscribe: () => undefined,
       resolveCompletion,
       completion,
+      startedAt: Date.now(),
     };
 
     activeTrace.unsubscribe = session.transport.onEvent((message) => {
@@ -66,7 +77,7 @@ export class TraceRecorder {
     }
   }
 
-  async stop(filePath?: string): Promise<TraceRecordingSummary> {
+  async stop(filePath?: string): Promise<TraceRecordingResult> {
     if (!this.activeTrace) {
       throw new Error("No active trace to stop");
     }
@@ -77,6 +88,7 @@ export class TraceRecorder {
     await activeTrace.session.transport.send("Tracing.end");
     await activeTrace.completion;
     activeTrace.unsubscribe();
+    const stoppedAt = Date.now();
 
     const outputPath = filePath ? path.resolve(filePath) : undefined;
     if (outputPath) {
@@ -86,7 +98,14 @@ export class TraceRecorder {
     return {
       eventCount: activeTrace.events.length,
       filePath: outputPath,
+      startedAt: activeTrace.startedAt,
+      stoppedAt,
+      events: [...activeTrace.events],
     };
+  }
+
+  getElapsedMs(): number | null {
+    return this.activeTrace ? Date.now() - this.activeTrace.startedAt : null;
   }
 
   private handleEvent(activeTrace: ActiveTrace, message: CdpEventMessage): void {

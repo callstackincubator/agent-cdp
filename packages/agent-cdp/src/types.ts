@@ -124,6 +124,23 @@ export type IpcCommand =
   | { type: "network-response-body"; requestId: string; sessionId?: string; filePath?: string }
   | { type: "start-trace" }
   | { type: "stop-trace"; filePath?: string }
+  | { type: "trace-status" }
+  | { type: "trace-list-sessions"; limit?: number; offset?: number }
+  | { type: "trace-summary"; sessionId?: string }
+  | { type: "trace-tracks"; sessionId?: string; limit?: number; offset?: number; text?: string; group?: string }
+  | {
+      type: "trace-entries";
+      sessionId?: string;
+      track?: string;
+      typeFilter?: "measure" | "mark" | "stamp";
+      text?: string;
+      startMs?: number;
+      endMs?: number;
+      limit?: number;
+      offset?: number;
+      sortBy?: "time" | "duration" | "name";
+    }
+  | { type: "trace-entry"; sessionId?: string; entryId: string }
   | { type: "capture-memory"; filePath: string }
   | { type: "js-profile-start"; name?: string; samplingIntervalUs?: number }
   | { type: "js-profile-stop" }
