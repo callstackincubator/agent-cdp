@@ -17,7 +17,9 @@ describe("shouldReattachConsoleCollector", () => {
 
 describe("getConnectionErrorMessage", () => {
   it("explains when no target has been selected", () => {
-    expect(getConnectionErrorMessage(null)).toBe("No target selected. Use `target select` first.");
+    expect(getConnectionErrorMessage(null)).toBe(
+      "No target available. Use `target list` to find one, then `target select <id>`.",
+    );
   });
 
   it("explains when a target exists but is disconnected", () => {

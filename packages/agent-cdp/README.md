@@ -93,7 +93,7 @@ agent-cdp target clear
 - **Console** — list and fetch log lines: `console list`, `console get <id>`
 - **Runtime** — evaluate expressions, inspect returned object handles, and release preserved inspector references: `runtime eval`, `runtime props`, `runtime release`, `runtime release-group`
 - **Network** — bounded live capture plus persisted sessions: `network status`, `network start`, `network summary`, `network list`, `network request`, `network request-headers`, `network response-headers`, `network request-body`, `network response-body`
-- **Trace** — `trace start` / `trace stop [--file PATH]` for raw trace capture
+- **Trace** — explicit trace capture plus in-memory session analysis for `performance.measure`, `performance.mark`, `console.timeStamp`, and custom DevTools tracks: `trace start`, `trace stop`, `trace summary`, `trace tracks`, `trace entries`, `trace entry`
 - **Memory (raw)** — `memory capture --file PATH` for a heap snapshot file
 - **Heap snapshot tools** — `mem-snapshot` commands to capture, load, summarize, diff snapshots, inspect classes/instances/retainers, and triage leak-style comparisons
 - **JS heap monitor** — `js-memory` commands for sampling, summaries, diffs, trends, and leak-oriented signals
@@ -181,3 +181,56 @@ Current limitations:
 - WebSocket visibility is limited to handshake metadata in v1.
 - There is no throttling, blocking, mocking, replay, or HAR export in v1.
 - Timing, size, protocol, cache, and remote-endpoint metadata may be partial or absent depending on target behavior.
+
+## Trace inspection
+
+Use `trace` when you need to capture a bounded trace, then navigate the analyzed results in small, filterable chunks rather than dumping raw `traceEvents` into the terminal.
+
+Quick start:
+
+```sh
+agent-cdp trace start
+# reproduce the interaction you want to inspect
+agent-cdp trace stop
+agent-cdp trace summary
+agent-cdp trace tracks
+agent-cdp trace entries
+agent-cdp trace entry --id te_1
+```
+
+What the current trace tooling can inspect:
+
+- plain `performance.measure()` entries
+- plain `performance.mark()` entries
+- `console.timeStamp()` entries, including custom tracks and groups emitted through DevTools timeline events
+- custom track and group metadata attached through DevTools-style `detail.devtools` payloads on user timing entries
+- custom traces emitted by tools like React DevTools when they surface track-based timeline data through the trace stream
+
+Default behavior:
+
+- Tracing is explicit. The daemon does not start recording on startup; use `trace start` when you want a capture.
+- `trace stop` stores an analyzed trace session in daemon memory so agents can query it immediately.
+- `trace stop --file PATH` can still export the raw trace JSON when you need to inspect the underlying `traceEvents` directly.
+- When `--session` is omitted, trace queries read from the latest analyzed session.
+- `trace summary` gives a compact overview first.
+- `trace tracks` lists discovered built-in and custom tracks with pagination/filtering.
+- `trace entries` is the main drill-down command; it defaults to measures and supports `--track`, `--type`, `--text`, `--start-ms`, `--end-ms`, `--limit`, `--offset`, and `--sort`.
+- `trace entry` shows the full details for exactly one selected entry.
+
+Examples:
+
+```sh
+agent-cdp trace summary
+agent-cdp trace tracks --group "Scheduler ⚛"
+agent-cdp trace entries --track "Image Processing" --limit 10
+agent-cdp trace entries --type mark --text boot
+agent-cdp trace entries --start-ms 0 --end-ms 100 --sort duration
+agent-cdp trace entry --id te_16
+```
+
+Current limitations:
+
+- Trace analysis is optimized for compact CLI inspection, not full flamechart rendering.
+- Default track output reports active time on a track; use verbose output when you need the broader span between first and last entry.
+- The parser handles common user timing and DevTools custom-track shapes seen in Chrome, React DevTools, and similar tools, but uncommon trace producers may still emit unsupported event forms.
+- Trace sessions are stored in a bounded in-memory history rather than persisted automatically.

@@ -100,13 +100,25 @@ That skill contains session behavior, common workflows, body inspection guidance
 
 ## Trace recording
 
+For trace workflows, run:
+
 ```bash
-agent-cdp trace start                       # begin recording a performance trace
-agent-cdp trace stop [--file PATH]          # stop and save (or auto-name) the trace
+agent-cdp skills get trace
 ```
 
-Produces a `.json` file loadable in Chrome DevTools Performance tab or
-`chrome://tracing`.
+That skill contains trace session behavior, user-timing/custom-track inspection, token-efficient navigation guidance, and raw export guidance.
+
+Minimal commands:
+
+```bash
+agent-cdp trace start                       # begin recording a performance trace
+agent-cdp trace stop [--file PATH]          # stop, analyze in memory, and optionally export the raw trace
+agent-cdp trace summary
+agent-cdp trace tracks
+agent-cdp trace entries
+```
+
+Use `--file PATH` only when you need the raw trace JSON for direct inspection or external tools.
 
 ## Raw memory capture
 
