@@ -253,6 +253,53 @@ function discoveryOptionsFromFlags(flags: Record<string, string | boolean>): Dis
   };
 }
 
+export const MULTIPLE_TARGETS_AVAILABLE_MESSAGE =
+  "Multiple targets available. Run 'agent-cdp target list' and 'agent-cdp target select <id>'.";
+
+interface TargetSelectionDeps {
+  ensureDaemon: typeof ensureDaemon;
+  sendCommand: typeof sendCommand;
+}
+
+export async function ensureTargetSelected(
+  deps: TargetSelectionDeps = { ensureDaemon, sendCommand },
+): Promise<void> {
+  await deps.ensureDaemon();
+
+  const statusResponse = await deps.sendCommand({ type: "status" });
+  if (!statusResponse.ok) {
+    throw new Error(statusResponse.error || "Failed to load daemon status");
+  }
+
+  if (readStatusInfo(statusResponse.data).selectedTarget) {
+    return;
+  }
+
+  const targetsResponse = await deps.sendCommand({ type: "list-targets", options: {} });
+  if (!targetsResponse.ok) {
+    throw new Error(targetsResponse.error || "Failed to list targets");
+  }
+
+  const targets = readTargets(targetsResponse.data);
+  if (targets.length === 0) {
+    return;
+  }
+
+  if (targets.length > 1) {
+    throw new Error(MULTIPLE_TARGETS_AVAILABLE_MESSAGE);
+  }
+
+  const target = targets[0];
+  const selectResponse = await deps.sendCommand({
+    type: "select-target",
+    targetId: target.id,
+    options: {},
+  });
+  if (!selectResponse.ok) {
+    throw new Error(selectResponse.error || "Failed to auto-select target");
+  }
+}
+
 export async function main(): Promise<void> {
   const { command, flags } = parseArgs(process.argv.slice(2));
   const cmd = command[0];
@@ -351,7 +398,7 @@ export async function main(): Promise<void> {
   }
 
   if (cmd === "console" && command[1] === "list") {
-    await ensureDaemon();
+    await ensureTargetSelected();
     const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
     const response = await sendCommand({ type: "list-console-messages", limit });
     if (!response.ok) {
@@ -367,7 +414,7 @@ export async function main(): Promise<void> {
     if (Number.isNaN(id)) {
       throw new Error("Usage: agent-cdp console get <id>");
     }
-    await ensureDaemon();
+    await ensureTargetSelected();
     const response = await sendCommand({ type: "get-console-message", id });
     if (!response.ok) {
       throw new Error(response.error || "Failed to get console message");
@@ -387,7 +434,7 @@ export async function main(): Promise<void> {
   if (cmd === "network" && command[1] === "start") {
     const name = typeof flags.name === "string" ? flags.name : undefined;
     const preserveAcrossNavigation = flags["preserve-across-navigation"] === true;
-    await ensureDaemon();
+    await ensureTargetSelected();
     const response = await sendCommand({ type: "network-start", name, preserveAcrossNavigation });
     if (!response.ok) throw new Error(response.error || "Failed to start network session");
     console.log(`Network session started. Session ID: ${response.data as string}`);
@@ -414,7 +461,7 @@ export async function main(): Promise<void> {
 
   if (cmd === "network" && command[1] === "summary") {
     const sessionId = typeof flags.session === "string" ? flags.session : undefined;
-    await ensureDaemon();
+    await ensureTargetSelected();
     const response = await sendCommand({ type: "network-summary", sessionId });
     if (!response.ok) throw new Error(response.error || "Failed to summarize network requests");
     console.log(formatNetworkSummary(response.data as Parameters<typeof formatNetworkSummary>[0], verbose));
@@ -433,7 +480,7 @@ export async function main(): Promise<void> {
     const maxMs = typeof flags["max-ms"] === "string" ? Number.parseFloat(flags["max-ms"]) : undefined;
     const minBytes = typeof flags["min-bytes"] === "string" ? Number.parseInt(flags["min-bytes"], 10) : undefined;
     const maxBytes = typeof flags["max-bytes"] === "string" ? Number.parseInt(flags["max-bytes"], 10) : undefined;
-    await ensureDaemon();
+    await ensureTargetSelected();
     const response = await sendCommand({
       type: "network-list",
       sessionId,
@@ -457,7 +504,7 @@ export async function main(): Promise<void> {
     const requestId = typeof flags.id === "string" ? flags.id : undefined;
     if (!requestId) throw new Error("Usage: agent-cdp network request --id REQ_ID [--session ID]");
     const sessionId = typeof flags.session === "string" ? flags.session : undefined;
-    await ensureDaemon();
+    await ensureTargetSelected();
     const response = await sendCommand({ type: "network-request", requestId, sessionId });
     if (!response.ok) throw new Error(response.error || "Failed to get network request");
     console.log(formatNetworkRequest(response.data as Parameters<typeof formatNetworkRequest>[0], verbose));
@@ -469,7 +516,7 @@ export async function main(): Promise<void> {
     if (!requestId) throw new Error("Usage: agent-cdp network request-headers --id REQ_ID [--session ID] [--name TEXT]");
     const sessionId = typeof flags.session === "string" ? flags.session : undefined;
     const name = typeof flags.name === "string" ? flags.name : undefined;
-    await ensureDaemon();
+    await ensureTargetSelected();
     const response = await sendCommand({ type: "network-request-headers", requestId, sessionId, name });
     if (!response.ok) throw new Error(response.error || "Failed to get request headers");
     console.log(formatNetworkHeaders(response.data as Parameters<typeof formatNetworkHeaders>[0]));
@@ -481,7 +528,7 @@ export async function main(): Promise<void> {
     if (!requestId) throw new Error("Usage: agent-cdp network response-headers --id REQ_ID [--session ID] [--name TEXT]");
     const sessionId = typeof flags.session === "string" ? flags.session : undefined;
     const name = typeof flags.name === "string" ? flags.name : undefined;
-    await ensureDaemon();
+    await ensureTargetSelected();
     const response = await sendCommand({ type: "network-response-headers", requestId, sessionId, name });
     if (!response.ok) throw new Error(response.error || "Failed to get response headers");
     console.log(formatNetworkHeaders(response.data as Parameters<typeof formatNetworkHeaders>[0]));
@@ -493,7 +540,7 @@ export async function main(): Promise<void> {
     if (!requestId) throw new Error("Usage: agent-cdp network request-body --id REQ_ID [--session ID] [--file PATH]");
     const sessionId = typeof flags.session === "string" ? flags.session : undefined;
     const filePath = typeof flags.file === "string" ? flags.file : undefined;
-    await ensureDaemon();
+    await ensureTargetSelected();
     const response = await sendCommand({ type: "network-request-body", requestId, sessionId, filePath });
     if (!response.ok) throw new Error(response.error || "Failed to get request body");
     console.log(formatNetworkBody(response.data as Parameters<typeof formatNetworkBody>[0]));
@@ -505,7 +552,7 @@ export async function main(): Promise<void> {
     if (!requestId) throw new Error("Usage: agent-cdp network response-body --id REQ_ID [--session ID] [--file PATH]");
     const sessionId = typeof flags.session === "string" ? flags.session : undefined;
     const filePath = typeof flags.file === "string" ? flags.file : undefined;
-    await ensureDaemon();
+    await ensureTargetSelected();
     const response = await sendCommand({ type: "network-response-body", requestId, sessionId, filePath });
     if (!response.ok) throw new Error(response.error || "Failed to get response body");
     console.log(formatNetworkBody(response.data as Parameters<typeof formatNetworkBody>[0]));
@@ -513,7 +560,7 @@ export async function main(): Promise<void> {
   }
 
   if (cmd === "trace" && command[1] === "start") {
-    await ensureDaemon();
+    await ensureTargetSelected();
     const response = await sendCommand({ type: "start-trace" });
     if (!response.ok) {
       throw new Error(response.error || "Failed to start trace");
@@ -538,7 +585,7 @@ export async function main(): Promise<void> {
     if (!filePath) {
       throw new Error("Usage: agent-cdp memory capture --file PATH");
     }
-    await ensureDaemon();
+    await ensureTargetSelected();
     const response = await sendCommand({ type: "capture-memory", filePath });
     if (!response.ok) {
       throw new Error(response.error || "Failed to capture heap snapshot");
@@ -551,7 +598,7 @@ export async function main(): Promise<void> {
     const name = typeof flags.name === "string" ? flags.name : undefined;
     const collectGarbage = flags.gc === true;
     const filePath = typeof flags.file === "string" ? flags.file : undefined;
-    await ensureDaemon();
+    await ensureTargetSelected();
     const response = await sendCommand({ type: "mem-snapshot-capture", name, collectGarbage, filePath });
     if (!response.ok) throw new Error(response.error || "Failed to capture heap snapshot");
     console.log(formatMemSnapshotMeta(response.data as MemSnapshotMeta, verbose));
@@ -697,7 +744,7 @@ export async function main(): Promise<void> {
   if (cmd === "js-memory" && command[1] === "sample") {
     const label = typeof flags.label === "string" ? flags.label : undefined;
     const collectGarbage = flags.gc === true;
-    await ensureDaemon();
+    await ensureTargetSelected();
     const response = await sendCommand({ type: "js-memory-sample", label, collectGarbage });
     if (!response.ok) throw new Error(response.error || "Failed to capture heap usage sample");
     console.log(formatJsMemorySample(response.data as Parameters<typeof formatJsMemorySample>[0], verbose));
@@ -758,7 +805,7 @@ export async function main(): Promise<void> {
     const stackDepth = typeof flags["stack-depth"] === "string" ? Number.parseInt(flags["stack-depth"], 10) : undefined;
     const includeObjectsCollectedByMajorGC = flags["include-major-gc"] === true;
     const includeObjectsCollectedByMinorGC = flags["include-minor-gc"] === true;
-    await ensureDaemon();
+    await ensureTargetSelected();
     const response = await sendCommand({
       type: "js-allocation-start",
       name,
@@ -860,7 +907,7 @@ export async function main(): Promise<void> {
 
   if (cmd === "js-allocation-timeline" && command[1] === "start") {
     const name = typeof flags.name === "string" ? flags.name : undefined;
-    await ensureDaemon();
+    await ensureTargetSelected();
     const response = await sendCommand({ type: "js-allocation-timeline-start", name });
     if (!response.ok) throw new Error(response.error || "Failed to start JS allocation timeline session");
     console.log("JS allocation timeline session started");
@@ -971,7 +1018,7 @@ export async function main(): Promise<void> {
     const name = typeof flags.name === "string" ? flags.name : undefined;
     const samplingIntervalUs =
       typeof flags.interval === "string" ? Number.parseInt(flags.interval, 10) : undefined;
-    await ensureDaemon();
+    await ensureTargetSelected();
     const response = await sendCommand({ type: "js-profile-start", name, samplingIntervalUs });
     if (!response.ok) throw new Error(response.error || "Failed to start JS profile");
     console.log("JS profile started");
@@ -979,7 +1026,7 @@ export async function main(): Promise<void> {
   }
 
   if (cmd === "js-profile" && command[1] === "stop") {
-    await ensureDaemon();
+    await ensureTargetSelected();
     const response = await sendCommand({ type: "js-profile-stop" });
     if (!response.ok) throw new Error(response.error || "Failed to stop JS profile");
     console.log(`JS profile stopped. Session ID: ${response.data as string}`);
