@@ -11,6 +11,7 @@ import { JsProfiler } from "./js-profiler/index.js";
 import { MemorySnapshotter } from "./memory.js";
 import { NetworkManager } from "./network/index.js";
 import { createTargetProviders } from "./providers.js";
+import { RuntimeManager } from "./runtime/index.js";
 import { SessionManager } from "./session-manager.js";
 import { TraceRecorder } from "./trace.js";
 import type { DaemonInfo, IpcCommand, IpcResponse, StatusInfo } from "./types.js";
@@ -51,6 +52,7 @@ class Daemon {
   private readonly jsAllocationTimelineProfiler = new JsAllocationTimelineProfiler(this.heapSnapshotManager);
   private readonly jsHeapUsageMonitor = new JsHeapUsageMonitor();
   private readonly providers = createTargetProviders();
+  private readonly runtimeManager = new RuntimeManager();
   private readonly sessionManager = new SessionManager(this.providers);
   private readonly traceRecorder = new TraceRecorder();
   private readonly jsProfiler = new JsProfiler();
@@ -170,6 +172,41 @@ class Daemon {
         this.networkManager.detach();
         await this.sessionManager.clearTarget();
         return { ok: true, data: "Target cleared" };
+      }
+
+      if (command.type === "runtime-eval") {
+        const session = await this.requireSession();
+        return {
+          ok: true,
+          data: await this.runtimeManager.evaluate(session, {
+            expression: command.expression,
+            awaitPromise: command.awaitPromise,
+          }),
+        };
+      }
+
+      if (command.type === "runtime-get-properties") {
+        const session = await this.requireSession();
+        return {
+          ok: true,
+          data: await this.runtimeManager.getProperties(session, {
+            objectId: command.objectId,
+            ownProperties: command.ownProperties,
+            accessorPropertiesOnly: command.accessorPropertiesOnly,
+          }),
+        };
+      }
+
+      if (command.type === "runtime-release-object") {
+        const session = await this.requireSession();
+        await this.runtimeManager.releaseObject(session, command.objectId);
+        return { ok: true, data: null };
+      }
+
+      if (command.type === "runtime-release-object-group") {
+        const session = await this.requireSession();
+        await this.runtimeManager.releaseObjectGroup(session, command.objectGroup);
+        return { ok: true, data: null };
       }
 
       if (command.type === "network-status") {

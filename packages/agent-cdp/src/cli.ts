@@ -11,6 +11,12 @@ import {
   formatTraceSummary,
 } from "./formatters.js";
 import {
+  DEFAULT_RUNTIME_OBJECT_GROUP,
+  formatRuntimeEval,
+  formatRuntimeEvalJson,
+  formatRuntimeProperties,
+} from "./runtime/index.js";
+import {
   formatNetworkBody,
   formatNetworkHeaders,
   formatNetworkList,
@@ -100,6 +106,12 @@ Targets:
 Console:
   console list [--limit N]
   console get <id>
+
+Runtime:
+  runtime eval --expr EXPR [--await] [--json]
+  runtime props --id OBJECT_ID [--own] [--accessor-properties-only]
+  runtime release --id OBJECT_ID
+  runtime release-group [--group NAME]
 
 Network:
   network status
@@ -373,6 +385,74 @@ export async function main(): Promise<void> {
       throw new Error(response.error || "Failed to get console message");
     }
     console.log(formatConsoleMessage(readConsoleMessage(response.data), verbose));
+    return;
+  }
+
+  if (cmd === "runtime" && command[1] === "eval") {
+    const expression = typeof flags.expr === "string" ? flags.expr : undefined;
+    if (!expression) {
+      throw new Error("Usage: agent-cdp runtime eval --expr EXPR [--await] [--json]");
+    }
+
+    const awaitPromise = flags.await === true;
+    const json = flags.json === true;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "runtime-eval", expression, awaitPromise });
+    if (!response.ok) {
+      throw new Error(response.error || "Failed to evaluate runtime expression");
+    }
+
+    console.log(
+      json
+        ? formatRuntimeEvalJson(response.data as Parameters<typeof formatRuntimeEvalJson>[0])
+        : formatRuntimeEval(response.data as Parameters<typeof formatRuntimeEval>[0], verbose),
+    );
+    return;
+  }
+
+  if (cmd === "runtime" && command[1] === "props") {
+    const objectId = typeof flags.id === "string" ? flags.id : undefined;
+    if (!objectId) {
+      throw new Error("Usage: agent-cdp runtime props --id OBJECT_ID [--own] [--accessor-properties-only]");
+    }
+
+    const ownProperties = flags.own === true;
+    const accessorPropertiesOnly = flags["accessor-properties-only"] === true;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "runtime-get-properties", objectId, ownProperties, accessorPropertiesOnly });
+    if (!response.ok) {
+      throw new Error(response.error || "Failed to inspect runtime object properties");
+    }
+
+    console.log(formatRuntimeProperties(response.data as Parameters<typeof formatRuntimeProperties>[0], verbose));
+    return;
+  }
+
+  if (cmd === "runtime" && command[1] === "release") {
+    const objectId = typeof flags.id === "string" ? flags.id : undefined;
+    if (!objectId) {
+      throw new Error("Usage: agent-cdp runtime release --id OBJECT_ID");
+    }
+
+    await ensureDaemon();
+    const response = await sendCommand({ type: "runtime-release-object", objectId });
+    if (!response.ok) {
+      throw new Error(response.error || "Failed to release runtime object");
+    }
+
+    console.log(`Released runtime object: ${objectId}`);
+    return;
+  }
+
+  if (cmd === "runtime" && command[1] === "release-group") {
+    const objectGroup = typeof flags.group === "string" ? flags.group : DEFAULT_RUNTIME_OBJECT_GROUP;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "runtime-release-object-group", objectGroup });
+    if (!response.ok) {
+      throw new Error(response.error || "Failed to release runtime object group");
+    }
+
+    console.log(`Released runtime object group: ${objectGroup}`);
     return;
   }
 

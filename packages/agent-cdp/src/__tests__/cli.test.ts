@@ -21,6 +21,8 @@ describe("cli", () => {
     expect(usage()).toContain("stop");
     expect(usage()).toContain("target list [--url URL]");
     expect(usage()).toContain("target select <id> [--url URL]");
+    expect(usage()).toContain("runtime eval --expr EXPR [--await] [--json]");
+    expect(usage()).toContain("runtime props --id OBJECT_ID [--own] [--accessor-properties-only]");
     expect(usage()).toContain("network start [--name NAME] [--preserve-across-navigation]");
     expect(usage()).toContain("network response-body --id REQ_ID [--session ID] [--file PATH]");
     expect(usage()).toContain("js-allocation start");
