@@ -93,6 +93,10 @@ export type IpcCommand =
   | { type: "list-targets"; options: DiscoveryOptions }
   | { type: "select-target"; targetId: string; options: DiscoveryOptions }
   | { type: "clear-target" }
+  | { type: "runtime-eval"; expression: string; awaitPromise?: boolean }
+  | { type: "runtime-get-properties"; objectId: string; ownProperties?: boolean; accessorPropertiesOnly?: boolean }
+  | { type: "runtime-release-object"; objectId: string }
+  | { type: "runtime-release-object-group"; objectGroup: string }
   | { type: "list-console-messages"; limit?: number }
   | { type: "get-console-message"; id: number }
   | { type: "network-status" }

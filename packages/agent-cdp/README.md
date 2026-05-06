@@ -1,6 +1,6 @@
 # agent-cdp
 
-**agent-cdp** is a command-line tool that connects to apps and pages through the **Chrome DevTools Protocol (CDP)**. Use it to list debuggable targets, inspect network traffic, stream console output, record traces, inspect JavaScript heap usage, capture and analyze heap snapshots, and run JavaScript CPU profiles, all without opening DevTools yourself.
+**agent-cdp** is a command-line tool that connects to apps and pages through the **Chrome DevTools Protocol (CDP)**. Use it to list debuggable targets, evaluate runtime expressions, inspect network traffic, stream console output, record traces, inspect JavaScript heap usage, capture and analyze heap snapshots, and run JavaScript CPU profiles, all without opening DevTools yourself.
 
 ## Compatibility
 
@@ -91,6 +91,7 @@ agent-cdp target clear
 **3. Use the features you need**
 
 - **Console** — list and fetch log lines: `console list`, `console get <id>`
+- **Runtime** — evaluate expressions, inspect returned object handles, and release preserved inspector references: `runtime eval`, `runtime props`, `runtime release`, `runtime release-group`
 - **Network** — bounded live capture plus persisted sessions: `network status`, `network start`, `network summary`, `network list`, `network request`, `network request-headers`, `network response-headers`, `network request-body`, `network response-body`
 - **Trace** — explicit trace capture plus in-memory session analysis for `performance.measure`, `performance.mark`, `console.timeStamp`, and custom DevTools tracks: `trace start`, `trace stop`, `trace summary`, `trace tracks`, `trace entries`, `trace entry`
 - **Memory (raw)** — `memory capture --file PATH` for a heap snapshot file
@@ -108,7 +109,27 @@ agent-cdp stop
 
 ## Command overview
 
-Commands are grouped as **daemon**, **target**, **console**, **network**, **trace**, **memory**, **mem-snapshot**, **js-memory**, **js-allocation**, **js-allocation-timeline**, **js-profile**, and **skills** (bundled reference files). See `agent-cdp --help` for exact syntax and options.
+Commands are grouped as **daemon**, **target**, **console**, **runtime**, **network**, **trace**, **memory**, **mem-snapshot**, **js-memory**, **js-allocation**, **js-allocation-timeline**, **js-profile**, and **skills** (bundled reference files). See `agent-cdp --help` for exact syntax and options.
+
+## Runtime inspection
+
+Use `runtime` for live state inspection when you need more than captured console output.
+
+Quick start:
+
+```sh
+agent-cdp runtime eval --expr "process.version"
+agent-cdp runtime eval --expr "globalThis.store" --await
+agent-cdp runtime props --id <OBJECT_ID> --own
+agent-cdp runtime release --id <OBJECT_ID>
+agent-cdp runtime release-group
+```
+
+Notes:
+
+- Remote object handles are preserved by default so you can inspect them with `runtime props` after `runtime eval`.
+- Preserved handles should be released when you no longer need them in a long-lived daemon session.
+- `runtime eval` can have side effects if the expression mutates application state.
 
 ## Network inspection
 

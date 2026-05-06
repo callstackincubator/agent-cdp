@@ -1,6 +1,6 @@
 ---
 name: core
-description: Core agent-cdp usage guide. Read this before running any agent-cdp commands. Covers the daemon lifecycle, target selection, network inspection, console capture, trace recording, heap snapshot analysis, JS heap monitoring, and CPU profiling workflows. Use when you need to analyze network failures, memory leaks, CPU hotspots, or runtime behavior of a Chrome/Node.js target via Chrome DevTools Protocol.
+description: Core agent-cdp usage guide. Read this before running any agent-cdp commands. Covers the daemon lifecycle, target selection, runtime inspection, network inspection, console capture, trace recording, heap snapshot analysis, JS heap monitoring, and CPU profiling workflows. Use when you need to analyze network failures, memory leaks, CPU hotspots, or runtime behavior of a Chrome/Node.js target via Chrome DevTools Protocol.
 allowed-tools: Bash(agent-cdp:*)
 ---
 
@@ -8,8 +8,7 @@ allowed-tools: Bash(agent-cdp:*)
 
 CLI for deep runtime analysis of Chrome and Node.js processes via Chrome
 DevTools Protocol (CDP). Captures heap snapshots, CPU profiles, JS memory
-samples, network traffic, console output, and performance traces — all without modifying
-source code.
+samples, network traffic, console output, live runtime values, and performance traces — all without modifying source code.
 
 ## The core loop
 
@@ -78,6 +77,16 @@ agent-cdp console get <id>             # get full details of a specific message
 ```
 
 Console messages are collected while the daemon is running with an active target.
+
+## Runtime inspection
+
+For Runtime workflows, run:
+
+```bash
+agent-cdp skills get runtime
+```
+
+That skill covers expression evaluation, object handle inspection, and release guidance for preserved Runtime objects.
 
 ## Network inspection
 
