@@ -8,8 +8,16 @@ import {
   formatMemorySummary,
   formatStatus,
   formatTargetList,
-  formatTraceSummary,
 } from "./formatters.js";
+import {
+  formatTraceEntries,
+  formatTraceEntry,
+  formatTraceSessionList,
+  formatTraceSessionSummary,
+  formatTraceStatus,
+  formatTraceStop,
+  formatTraceTracks,
+} from "./trace/formatters.js";
 import {
   formatNetworkBody,
   formatNetworkHeaders,
@@ -72,12 +80,20 @@ import {
 } from "./js-profiler/formatters.js";
 import type { MemSnapshotMeta } from "./heap-snapshot/types.js";
 import type {
+  TraceEntriesResult,
+  TraceEntry,
+  TraceSessionListEntry,
+  TraceStatusResult,
+  TraceStopResult,
+  TraceSummaryResult,
+  TraceTracksResult,
+} from "./trace/types.js";
+import type {
   ConsoleMessage,
   DiscoveryOptions,
   MemorySnapshotSummary,
   StatusInfo,
   TargetDescriptor,
-  TraceRecordingSummary,
 } from "./types.js";
 
 export function usage(): string {
@@ -117,6 +133,12 @@ Network:
 Trace:
   trace start
   trace stop [--file PATH]
+  trace status
+  trace list [--limit N] [--offset N]
+  trace summary [--session ID]
+  trace tracks [--session ID] [--limit N] [--offset N] [--text TEXT] [--group NAME]
+  trace entries [--session ID] [--track NAME] [--type measure|mark|stamp] [--text TEXT] [--start-ms N] [--end-ms N] [--limit N] [--offset N] [--sort time|duration|name]
+  trace entry --id ENTRY_ID [--session ID]
 
 Memory (raw capture):
   memory capture --file PATH
@@ -239,12 +261,36 @@ function readConsoleMessage(data: unknown): ConsoleMessage {
   return data as ConsoleMessage;
 }
 
-function readTraceSummary(data: unknown): TraceRecordingSummary {
-  return data as TraceRecordingSummary;
-}
-
 function readMemorySummary(data: unknown): MemorySnapshotSummary {
   return data as MemorySnapshotSummary;
+}
+
+function readTraceStatus(data: unknown): TraceStatusResult {
+  return data as TraceStatusResult;
+}
+
+function readTraceStop(data: unknown): TraceStopResult {
+  return data as TraceStopResult;
+}
+
+function readTraceSessionList(data: unknown): TraceSessionListEntry[] {
+  return data as TraceSessionListEntry[];
+}
+
+function readTraceSessionSummary(data: unknown): TraceSummaryResult {
+  return data as TraceSummaryResult;
+}
+
+function readTraceTracks(data: unknown): TraceTracksResult {
+  return data as TraceTracksResult;
+}
+
+function readTraceEntries(data: unknown): TraceEntriesResult {
+  return data as TraceEntriesResult;
+}
+
+function readTraceEntry(data: unknown): TraceEntry {
+  return data as TraceEntry;
 }
 
 function discoveryOptionsFromFlags(flags: Record<string, string | boolean>): DiscoveryOptions {
@@ -576,7 +622,86 @@ export async function main(): Promise<void> {
     if (!response.ok) {
       throw new Error(response.error || "Failed to stop trace");
     }
-    console.log(formatTraceSummary(readTraceSummary(response.data), verbose));
+    console.log(formatTraceStop(readTraceStop(response.data), verbose));
+    return;
+  }
+
+  if (cmd === "trace" && command[1] === "status") {
+    await ensureDaemon();
+    const response = await sendCommand({ type: "trace-status" });
+    if (!response.ok) throw new Error(response.error || "Failed to get trace status");
+    console.log(formatTraceStatus(readTraceStatus(response.data), verbose));
+    return;
+  }
+
+  if (cmd === "trace" && command[1] === "list") {
+    const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
+    const offset = typeof flags.offset === "string" ? Number.parseInt(flags.offset, 10) : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "trace-list-sessions", limit, offset });
+    if (!response.ok) throw new Error(response.error || "Failed to list trace sessions");
+    console.log(formatTraceSessionList(readTraceSessionList(response.data), verbose));
+    return;
+  }
+
+  if (cmd === "trace" && command[1] === "summary") {
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "trace-summary", sessionId });
+    if (!response.ok) throw new Error(response.error || "Failed to get trace summary");
+    console.log(formatTraceSessionSummary(readTraceSessionSummary(response.data), verbose));
+    return;
+  }
+
+  if (cmd === "trace" && command[1] === "tracks") {
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
+    const offset = typeof flags.offset === "string" ? Number.parseInt(flags.offset, 10) : undefined;
+    const text = typeof flags.text === "string" ? flags.text : undefined;
+    const group = typeof flags.group === "string" ? flags.group : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({ type: "trace-tracks", sessionId, limit, offset, text, group });
+    if (!response.ok) throw new Error(response.error || "Failed to get trace tracks");
+    console.log(formatTraceTracks(readTraceTracks(response.data), verbose));
+    return;
+  }
+
+  if (cmd === "trace" && command[1] === "entries") {
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    const track = typeof flags.track === "string" ? flags.track : undefined;
+    const typeFilter = typeof flags.type === "string" ? flags.type : "measure";
+    const text = typeof flags.text === "string" ? flags.text : undefined;
+    const startMs = typeof flags["start-ms"] === "string" ? Number.parseFloat(flags["start-ms"]) : undefined;
+    const endMs = typeof flags["end-ms"] === "string" ? Number.parseFloat(flags["end-ms"]) : undefined;
+    const limit = typeof flags.limit === "string" ? Number.parseInt(flags.limit, 10) : undefined;
+    const offset = typeof flags.offset === "string" ? Number.parseInt(flags.offset, 10) : undefined;
+    const sortBy = typeof flags.sort === "string" ? flags.sort : undefined;
+    await ensureDaemon();
+    const response = await sendCommand({
+      type: "trace-entries",
+      sessionId,
+      track,
+      typeFilter: typeFilter as "measure" | "mark" | "stamp",
+      text,
+      startMs,
+      endMs,
+      limit,
+      offset,
+      sortBy: sortBy as "time" | "duration" | "name" | undefined,
+    });
+    if (!response.ok) throw new Error(response.error || "Failed to get trace entries");
+    console.log(formatTraceEntries(readTraceEntries(response.data), verbose));
+    return;
+  }
+
+  if (cmd === "trace" && command[1] === "entry") {
+    const sessionId = typeof flags.session === "string" ? flags.session : undefined;
+    const entryId = typeof flags.id === "string" ? flags.id : undefined;
+    if (!entryId) throw new Error("Usage: agent-cdp trace entry --id ENTRY_ID [--session ID]");
+    await ensureDaemon();
+    const response = await sendCommand({ type: "trace-entry", sessionId, entryId });
+    if (!response.ok) throw new Error(response.error || "Failed to get trace entry");
+    console.log(formatTraceEntry(readTraceEntry(response.data), verbose));
     return;
   }
 
