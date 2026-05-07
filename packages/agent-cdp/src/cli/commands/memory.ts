@@ -1,27 +1,14 @@
 import { Command } from "commander";
-import { formatMemorySummary } from "../../formatters.js";
 import { formatMemLeakCandidates, formatMemLeakTriplet, formatMemSnapshotClass, formatMemSnapshotClasses, formatMemSnapshotDiff, formatMemSnapshotInstance, formatMemSnapshotInstances, formatMemSnapshotList, formatMemSnapshotMeta, formatMemSnapshotRetainers, formatMemSnapshotSummary } from "../../heap-snapshot/formatters.js";
 import type { MemSnapshotMeta } from "../../heap-snapshot/types.js";
 import { formatJsMemoryDiff, formatJsMemoryLeakSignal, formatJsMemoryList, formatJsMemorySample, formatJsMemorySummary, formatJsMemoryTrend } from "../../js-memory/formatters.js";
-import type { MemorySnapshotSummary } from "../../types.js";
 import type { CliDeps } from "../context.js";
 import { ensureTargetSelected } from "../context.js";
 import { getVerbose, parseInteger, parseRequiredInteger, registerCommandGroupHelp, unwrapResponse } from "../shared.js";
 
-function readMemorySummary(data: unknown): MemorySnapshotSummary {
-  return data as MemorySnapshotSummary;
-}
-
 export function registerMemoryCommands(program: Command, deps: CliDeps): void {
-  const memory = registerCommandGroupHelp(program.command("memory").description("Raw memory capture commands"));
-
-  memory.command("capture").requiredOption("--file <path>").action(async (options: { file: string }, command) => {
-    await ensureTargetSelected(deps);
-    const data = unwrapResponse(await deps.sendCommand({ type: "capture-memory", filePath: options.file }), "Failed to capture heap snapshot");
-    console.log(formatMemorySummary(readMemorySummary(data), getVerbose(command)));
-  });
-
-  const snapshot = registerCommandGroupHelp(program.command("mem-snapshot").description("Heap snapshot analysis commands"));
+  const memory = registerCommandGroupHelp(program.command("memory").description("Memory inspection commands"));
+  const snapshot = registerCommandGroupHelp(memory.command("snapshot").description("Heap snapshot analysis commands"));
 
   snapshot.command("capture").option("--name <name>").option("--gc").option("--file <path>").action(async (options: { name?: string; gc?: boolean; file?: string }, command) => {
     await ensureTargetSelected(deps);
@@ -78,14 +65,14 @@ export function registerMemoryCommands(program: Command, deps: CliDeps): void {
 
   snapshot.command("instance").requiredOption("--id <id>").option("--snapshot <id>").action(async (options: { id: string; snapshot?: string }, command) => {
     await deps.ensureDaemon();
-    const nodeId = parseRequiredInteger(options.id, "Usage: agent-cdp mem-snapshot instance --id NODE_ID");
+    const nodeId = parseRequiredInteger(options.id, "Usage: agent-cdp memory snapshot instance --id NODE_ID");
     const data = unwrapResponse(await deps.sendCommand({ type: "mem-snapshot-instance", nodeId, snapshotId: options.snapshot }), "Failed to get instance");
     console.log(formatMemSnapshotInstance(data as Parameters<typeof formatMemSnapshotInstance>[0], getVerbose(command)));
   });
 
   snapshot.command("retainers").requiredOption("--id <id>").option("--snapshot <id>").option("--depth <n>").option("--limit <n>").action(async (options: Record<string, string | undefined>, command) => {
     await deps.ensureDaemon();
-    const nodeId = parseRequiredInteger(options.id, "Usage: agent-cdp mem-snapshot retainers --id NODE_ID");
+    const nodeId = parseRequiredInteger(options.id, "Usage: agent-cdp memory snapshot retainers --id NODE_ID");
     const data = unwrapResponse(
       await deps.sendCommand({ type: "mem-snapshot-retainers", nodeId, snapshotId: options.snapshot, depth: parseInteger(options.depth), limit: parseInteger(options.limit) }),
       "Failed to get retainers",
@@ -120,9 +107,9 @@ export function registerMemoryCommands(program: Command, deps: CliDeps): void {
     console.log(formatMemLeakCandidates(data as Parameters<typeof formatMemLeakCandidates>[0], getVerbose(command)));
   });
 
-  const jsMemory = registerCommandGroupHelp(program.command("js-memory").description("JS heap usage monitor commands"));
+  const usage = registerCommandGroupHelp(memory.command("usage").description("JS heap usage monitor commands"));
 
-  jsMemory.command("sample").option("--label <label>").option("--gc").action(async (options: { label?: string; gc?: boolean }, command) => {
+  usage.command("sample").option("--label <label>").option("--gc").action(async (options: { label?: string; gc?: boolean }, command) => {
     await ensureTargetSelected(deps);
     const data = unwrapResponse(
       await deps.sendCommand({ type: "js-memory-sample", label: options.label, collectGarbage: options.gc === true }),
@@ -131,7 +118,7 @@ export function registerMemoryCommands(program: Command, deps: CliDeps): void {
     console.log(formatJsMemorySample(data as Parameters<typeof formatJsMemorySample>[0], getVerbose(command)));
   });
 
-  jsMemory.command("list").option("--limit <n>").option("--offset <n>").action(async (options: { limit?: string; offset?: string }, command) => {
+  usage.command("list").option("--limit <n>").option("--offset <n>").action(async (options: { limit?: string; offset?: string }, command) => {
     await deps.ensureDaemon();
     const data = unwrapResponse(
       await deps.sendCommand({ type: "js-memory-list", limit: parseInteger(options.limit), offset: parseInteger(options.offset) }),
@@ -140,13 +127,13 @@ export function registerMemoryCommands(program: Command, deps: CliDeps): void {
     console.log(formatJsMemoryList(data as Parameters<typeof formatJsMemoryList>[0], getVerbose(command)));
   });
 
-  jsMemory.command("summary").action(async (_options, command) => {
+  usage.command("summary").action(async (_options, command) => {
     await deps.ensureDaemon();
     const data = unwrapResponse(await deps.sendCommand({ type: "js-memory-summary" }), "Failed to get JS memory summary");
     console.log(formatJsMemorySummary(data as Parameters<typeof formatJsMemorySummary>[0], getVerbose(command)));
   });
 
-  jsMemory.command("diff").requiredOption("--base <id>").requiredOption("--compare <id>").action(async (options: { base: string; compare: string }, command) => {
+  usage.command("diff").requiredOption("--base <id>").requiredOption("--compare <id>").action(async (options: { base: string; compare: string }, command) => {
     await deps.ensureDaemon();
     const data = unwrapResponse(
       await deps.sendCommand({ type: "js-memory-diff", baseSampleId: options.base, compareSampleId: options.compare }),
@@ -155,13 +142,13 @@ export function registerMemoryCommands(program: Command, deps: CliDeps): void {
     console.log(formatJsMemoryDiff(data as Parameters<typeof formatJsMemoryDiff>[0], getVerbose(command)));
   });
 
-  jsMemory.command("trend").option("--limit <n>").action(async (options: { limit?: string }, command) => {
+  usage.command("trend").option("--limit <n>").action(async (options: { limit?: string }, command) => {
     await deps.ensureDaemon();
     const data = unwrapResponse(await deps.sendCommand({ type: "js-memory-trend", limit: parseInteger(options.limit) }), "Failed to get JS memory trend");
     console.log(formatJsMemoryTrend(data as Parameters<typeof formatJsMemoryTrend>[0], getVerbose(command)));
   });
 
-  jsMemory.command("leak-signal").action(async (_options, command) => {
+  usage.command("leak-signal").action(async (_options, command) => {
     await deps.ensureDaemon();
     const data = unwrapResponse(await deps.sendCommand({ type: "js-memory-leak-signal" }), "Failed to get JS memory leak signal");
     console.log(formatJsMemoryLeakSignal(data as Parameters<typeof formatJsMemoryLeakSignal>[0], getVerbose(command)));

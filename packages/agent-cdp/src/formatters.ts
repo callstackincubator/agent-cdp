@@ -1,4 +1,4 @@
-import type { ConsoleMessage, MemorySnapshotSummary, StatusInfo, TraceRecordingSummary } from "./types.js";
+import type { ConsoleMessage, StatusInfo, TraceRecordingSummary } from "./types.js";
 
 export function formatStatus(info: StatusInfo, verbose = false): string {
   if (verbose) {
@@ -78,11 +78,4 @@ export function formatTraceSummary(summary: TraceRecordingSummary, verbose = fal
   }
 
   return summary.filePath ? `saved ${summary.filePath} (${summary.eventCount} events)` : `${summary.eventCount} events`;
-}
-
-export function formatMemorySummary(summary: MemorySnapshotSummary, verbose = false): string {
-  if (verbose) {
-    return `Heap snapshot chunks: ${summary.chunkCount}\nSaved to: ${summary.filePath}`;
-  }
-  return `saved ${summary.filePath} (${summary.chunkCount} chunks)`;
 }

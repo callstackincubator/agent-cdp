@@ -9,15 +9,13 @@ describe("cli", () => {
     expect(usage()).toContain("status");
     expect(usage()).toContain("stop");
     expect(usage()).toContain("target list [--url URL]");
-    expect(usage()).toContain("target select <id> [--url URL]");
     expect(usage()).toContain("runtime eval --expr EXPR [--await] [--json]");
-    expect(usage()).toContain("runtime props --id OBJECT_ID [--own] [--accessor-properties-only]");
-    expect(usage()).toContain("network start [--name NAME] [--preserve-across-navigation]");
-    expect(usage()).toContain("network response-body --id REQ_ID [--session ID] [--file PATH]");
-    expect(usage()).toContain("trace status");
-    expect(usage()).toContain("trace entries [--session ID] [--track NAME]");
-    expect(usage()).toContain("js-allocation start");
-    expect(usage()).toContain("js-allocation-timeline start");
+    expect(usage()).toContain("network list [--session ID] [--limit N] [--offset N]");
+    expect(usage()).toContain("memory snapshot capture [--name NAME] [--gc] [--file PATH]");
+    expect(usage()).toContain("memory usage summary");
+    expect(usage()).toContain("memory allocation hotspots [--session ID] [--limit N] [--offset N]");
+    expect(usage()).toContain("memory allocation-timeline summary [--session ID]");
+    expect(usage()).toContain("profile cpu hotspots [--session ID] [--limit N] [--offset N]");
   });
 
   it("prints the preserved top-level help text", async () => {
@@ -31,6 +29,9 @@ describe("cli", () => {
 
   it("prints subcommand help without failing for bare command groups", async () => {
     await expect(main(["memory"])).resolves.toBeUndefined();
+    await expect(main(["memory", "snapshot"])).resolves.toBeUndefined();
+    await expect(main(["profile"])).resolves.toBeUndefined();
+    await expect(main(["profile", "cpu"])).resolves.toBeUndefined();
   });
 
   it("treats --version as a normal successful exit", async () => {
@@ -110,6 +111,22 @@ describe("cli", () => {
         return { ok: true, data: [] };
       }
 
+      if (command.type === "js-memory-summary") {
+        return {
+          ok: true,
+          data: {
+            sampleCount: 0,
+            latestUsedSize: 0,
+            latestTotalSize: 0,
+            latestHeapSizeLimit: 0,
+            maxUsedSize: 0,
+            minUsedSize: 0,
+            averageUsedSize: 0,
+            deltaFromFirst: 0,
+          },
+        };
+      }
+
       if (command.type === "runtime-eval") {
         return {
           ok: true,
@@ -134,6 +151,7 @@ describe("cli", () => {
 
     await program.parseAsync(["target", "list", "--url", "http://127.0.0.1:9222"], { from: "user" });
     await program.parseAsync(["runtime", "eval", "--expr", "process.version"], { from: "user" });
+    await program.parseAsync(["memory", "usage", "summary"], { from: "user" });
 
     expect(sendCommandMock).toHaveBeenNthCalledWith(1, {
       type: "list-targets",
@@ -144,6 +162,7 @@ describe("cli", () => {
       expression: "process.version",
       awaitPromise: false,
     });
+    expect(sendCommandMock).toHaveBeenNthCalledWith(3, { type: "js-memory-summary" });
 
     logSpy.mockRestore();
   });
