@@ -63,11 +63,6 @@ export interface TraceRecordingSummary {
   filePath?: string;
 }
 
-export interface MemorySnapshotSummary {
-  chunkCount: number;
-  filePath: string;
-}
-
 export type SessionState = "disconnected" | "connecting" | "connected";
 
 export interface DaemonInfo {
@@ -145,7 +140,6 @@ export type IpcCommand =
       sortBy?: "time" | "duration" | "name";
     }
   | { type: "trace-entry"; sessionId?: string; entryId: string }
-  | { type: "capture-memory"; filePath: string }
   | { type: "js-profile-start"; name?: string; samplingIntervalUs?: number }
   | { type: "js-profile-stop" }
   | { type: "js-profile-status" }

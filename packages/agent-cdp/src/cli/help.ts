@@ -48,70 +48,67 @@ Trace:
   trace entries [--session ID] [--track NAME] [--type measure|mark|stamp] [--text TEXT] [--start-ms N] [--end-ms N] [--limit N] [--offset N] [--sort time|duration|name]
   trace entry --id ENTRY_ID [--session ID]
 
-Memory (raw capture):
-  memory capture --file PATH
+Memory Snapshot:
+  memory snapshot capture [--name NAME] [--gc] [--file PATH]
+  memory snapshot load --file PATH [--name NAME]
+  memory snapshot list
+  memory snapshot summary [--snapshot ID]
+  memory snapshot classes [--snapshot ID] [--limit N] [--offset N] [--sort retained|self|count] [--filter TEXT]
+  memory snapshot class --id CLASS_ID [--snapshot ID]
+  memory snapshot instances --class CLASS_ID [--snapshot ID] [--limit N] [--offset N] [--sort retained|self]
+  memory snapshot instance --id NODE_ID [--snapshot ID]
+  memory snapshot retainers --id NODE_ID [--snapshot ID] [--depth N] [--limit N]
+  memory snapshot diff --base SNAPSHOT_ID --compare SNAPSHOT_ID [--sort retained|self|count] [--limit N]
+  memory snapshot leak-triplet --baseline ID --action ID --cleanup ID [--limit N]
+  memory snapshot leak-candidates [--snapshot ID] [--limit N]
 
-Heap Snapshot Analyzer:
-  mem-snapshot capture [--name NAME] [--gc] [--file PATH]
-  mem-snapshot load --file PATH [--name NAME]
-  mem-snapshot list
-  mem-snapshot summary [--snapshot ID]
-  mem-snapshot classes [--snapshot ID] [--limit N] [--offset N] [--sort retained|self|count] [--filter TEXT]
-  mem-snapshot class --id CLASS_ID [--snapshot ID]
-  mem-snapshot instances --class CLASS_ID [--snapshot ID] [--limit N] [--offset N] [--sort retained|self]
-  mem-snapshot instance --id NODE_ID [--snapshot ID]
-  mem-snapshot retainers --id NODE_ID [--snapshot ID] [--depth N] [--limit N]
-  mem-snapshot diff --base SNAPSHOT_ID --compare SNAPSHOT_ID [--sort retained|self|count] [--limit N]
-  mem-snapshot leak-triplet --baseline ID --action ID --cleanup ID [--limit N]
-  mem-snapshot leak-candidates [--snapshot ID] [--limit N]
+Memory Usage:
+  memory usage sample [--label LABEL] [--gc]
+  memory usage list [--limit N] [--offset N]
+  memory usage summary
+  memory usage diff --base SAMPLE_ID --compare SAMPLE_ID
+  memory usage trend [--limit N]
+  memory usage leak-signal
 
-JS Heap Usage Monitor:
-  js-memory sample [--label LABEL] [--gc]
-  js-memory list [--limit N] [--offset N]
-  js-memory summary
-  js-memory diff --base SAMPLE_ID --compare SAMPLE_ID
-  js-memory trend [--limit N]
-  js-memory leak-signal
+Memory Allocation:
+  memory allocation start [--name NAME] [--interval BYTES] [--stack-depth N] [--include-major-gc] [--include-minor-gc]
+  memory allocation stop
+  memory allocation status
+  memory allocation list [--limit N] [--offset N]
+  memory allocation summary [--session ID]
+  memory allocation hotspots [--session ID] [--limit N] [--offset N] [--sort bytes|samples]
+  memory allocation bucketed [--session ID] [--limit N]
+  memory allocation leak-signal [--session ID]
+  memory allocation export --file PATH [--session ID]
+  memory allocation source-maps [--session ID]
 
-JS Allocation Profiler:
-  js-allocation start [--name NAME] [--interval BYTES] [--stack-depth N] [--include-major-gc] [--include-minor-gc]
-  js-allocation stop
-  js-allocation status
-  js-allocation list [--limit N] [--offset N]
-  js-allocation summary [--session ID]
-  js-allocation hotspots [--session ID] [--limit N] [--offset N] [--sort bytes|samples]
-  js-allocation bucketed [--session ID] [--limit N]
-  js-allocation leak-signal [--session ID]
-  js-allocation export --file PATH [--session ID]
-  js-allocation source-maps [--session ID]
+Memory Allocation Timeline:
+  memory allocation-timeline start [--name NAME]
+  memory allocation-timeline stop
+  memory allocation-timeline status
+  memory allocation-timeline list [--limit N] [--offset N]
+  memory allocation-timeline summary [--session ID]
+  memory allocation-timeline buckets [--session ID] [--limit N]
+  memory allocation-timeline hotspots [--session ID] [--limit N] [--offset N]
+  memory allocation-timeline leak-signal [--session ID]
+  memory allocation-timeline export --file PATH [--session ID]
+  memory allocation-timeline source-maps [--session ID]
+  After stop, use snapshot id with: memory snapshot summary|classes|retainers --snapshot ms_N
 
-JS Allocation Timeline:
-  js-allocation-timeline start [--name NAME]
-  js-allocation-timeline stop
-  js-allocation-timeline status
-  js-allocation-timeline list [--limit N] [--offset N]
-  js-allocation-timeline summary [--session ID]
-  js-allocation-timeline buckets [--session ID] [--limit N]
-  js-allocation-timeline hotspots [--session ID] [--limit N] [--offset N]
-  js-allocation-timeline leak-signal [--session ID]
-  js-allocation-timeline export --file PATH [--session ID]
-  js-allocation-timeline source-maps [--session ID]
-  After stop, use snapshot id with: mem-snapshot summary|classes|retainers --snapshot ms_N
-
-JS Profiler:
-  js-profile start [--name NAME] [--interval US]
-  js-profile stop
-  js-profile status
-  js-profile list [--limit N] [--offset N]
-  js-profile summary [--session ID]
-  js-profile hotspots [--session ID] [--limit N] [--offset N] [--sort selfMs|totalMs] [--min-self-ms N] [--include-runtime]
-  js-profile hotspot --id HOTSPOT_ID [--session ID] [--stack-limit N]
-  js-profile modules [--session ID] [--limit N] [--offset N] [--sort selfMs|totalMs]
-  js-profile stacks [--session ID] [--limit N] [--offset N] [--min-ms N] [--max-depth N]
-  js-profile slice --start MS --end MS [--session ID] [--limit N]
-  js-profile diff --base SESSION_ID --compare SESSION_ID [--limit N] [--min-delta-pct N]
-  js-profile export [--session ID]
-  js-profile source-maps [--session ID]
+CPU Profiling:
+  profile cpu start [--name NAME] [--interval US]
+  profile cpu stop
+  profile cpu status
+  profile cpu list [--limit N] [--offset N]
+  profile cpu summary [--session ID]
+  profile cpu hotspots [--session ID] [--limit N] [--offset N] [--sort selfMs|totalMs] [--min-self-ms N] [--include-runtime]
+  profile cpu hotspot --id HOTSPOT_ID [--session ID] [--stack-limit N]
+  profile cpu modules [--session ID] [--limit N] [--offset N] [--sort selfMs|totalMs]
+  profile cpu stacks [--session ID] [--limit N] [--offset N] [--min-ms N] [--max-depth N]
+  profile cpu slice --start MS --end MS [--session ID] [--limit N]
+  profile cpu diff --base SESSION_ID --compare SESSION_ID [--limit N] [--min-delta-pct N]
+  profile cpu export [--session ID]
+  profile cpu source-maps [--session ID]
 
 Skills:
   skills list             List available skill files

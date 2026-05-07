@@ -120,14 +120,6 @@ agent-cdp trace entries
 
 Use `--file PATH` only when you need the raw trace JSON for direct inspection or external tools.
 
-## Raw memory capture
-
-```bash
-agent-cdp memory capture --file PATH       # capture a raw heap snapshot to file
-```
-
-For structured heap analysis, prefer `mem-snapshot capture` below.
-
 ## Heap snapshot analysis
 
 The heap snapshot workflow captures a V8 heap snapshot and lets you inspect
@@ -135,41 +127,41 @@ retained objects, find memory leaks, and compare snapshots.
 
 ```bash
 # Capture
-agent-cdp mem-snapshot capture [--name NAME] [--gc] [--file PATH]
-agent-cdp mem-snapshot load --file PATH [--name NAME]   # load an existing .heapsnapshot
+agent-cdp memory snapshot capture [--name NAME] [--gc] [--file PATH]
+agent-cdp memory snapshot load --file PATH [--name NAME]   # load an existing .heapsnapshot
 
 # List and summarize
-agent-cdp mem-snapshot list
-agent-cdp mem-snapshot summary [--snapshot ID]
+agent-cdp memory snapshot list
+agent-cdp memory snapshot summary [--snapshot ID]
 
 # Inspect classes and objects
-agent-cdp mem-snapshot classes [--snapshot ID] [--limit N] [--offset N] [--sort retained|self|count] [--filter TEXT]
-agent-cdp mem-snapshot class --id CLASS_ID [--snapshot ID]
-agent-cdp mem-snapshot instances --class CLASS_ID [--snapshot ID] [--limit N] [--offset N] [--sort retained|self]
-agent-cdp mem-snapshot instance --id NODE_ID [--snapshot ID]
-agent-cdp mem-snapshot retainers --id NODE_ID [--snapshot ID] [--depth N] [--limit N]
+agent-cdp memory snapshot classes [--snapshot ID] [--limit N] [--offset N] [--sort retained|self|count] [--filter TEXT]
+agent-cdp memory snapshot class --id CLASS_ID [--snapshot ID]
+agent-cdp memory snapshot instances --class CLASS_ID [--snapshot ID] [--limit N] [--offset N] [--sort retained|self]
+agent-cdp memory snapshot instance --id NODE_ID [--snapshot ID]
+agent-cdp memory snapshot retainers --id NODE_ID [--snapshot ID] [--depth N] [--limit N]
 
 # Leak detection
-agent-cdp mem-snapshot diff --base SNAPSHOT_ID --compare SNAPSHOT_ID [--sort retained|self|count] [--limit N]
-agent-cdp mem-snapshot leak-candidates [--snapshot ID] [--limit N]
-agent-cdp mem-snapshot leak-triplet --baseline ID --action ID --cleanup ID [--limit N]
+agent-cdp memory snapshot diff --base SNAPSHOT_ID --compare SNAPSHOT_ID [--sort retained|self|count] [--limit N]
+agent-cdp memory snapshot leak-candidates [--snapshot ID] [--limit N]
+agent-cdp memory snapshot leak-triplet --baseline ID --action ID --cleanup ID [--limit N]
 ```
 
 ### Memory leak detection workflow
 
 ```bash
 # 1. Baseline
-agent-cdp mem-snapshot capture --name baseline --gc
+agent-cdp memory snapshot capture --name baseline --gc
 # 2. Trigger the leaky action in the app
 # 3. Capture again
-agent-cdp mem-snapshot capture --name after-action --gc
+agent-cdp memory snapshot capture --name after-action --gc
 # 4. Clean up (GC, reset state)
 # 5. Final capture
-agent-cdp mem-snapshot capture --name cleanup --gc
+agent-cdp memory snapshot capture --name cleanup --gc
 # 6. Diff to find what grew
-agent-cdp mem-snapshot diff --base 1 --compare 2 --sort retained
+agent-cdp memory snapshot diff --base 1 --compare 2 --sort retained
 # 7. Three-snapshot leak analysis
-agent-cdp mem-snapshot leak-triplet --baseline 1 --action 2 --cleanup 3
+agent-cdp memory snapshot leak-triplet --baseline 1 --action 2 --cleanup 3
 ```
 
 Use `--gc` before capturing to force a garbage collection so only truly
@@ -180,15 +172,15 @@ retained objects appear in the snapshot.
 Lightweight heap usage sampling — faster than full snapshots.
 
 ```bash
-agent-cdp js-memory sample [--label LABEL] [--gc]    # take a heap usage sample
-agent-cdp js-memory list [--limit N] [--offset N]    # list all samples
-agent-cdp js-memory summary                           # overall stats
-agent-cdp js-memory diff --base SAMPLE_ID --compare SAMPLE_ID
-agent-cdp js-memory trend [--limit N]                 # usage over time
-agent-cdp js-memory leak-signal                       # heuristic leak indicator
+agent-cdp memory usage sample [--label LABEL] [--gc]    # take a heap usage sample
+agent-cdp memory usage list [--limit N] [--offset N]    # list all samples
+agent-cdp memory usage summary                           # overall stats
+agent-cdp memory usage diff --base SAMPLE_ID --compare SAMPLE_ID
+agent-cdp memory usage trend [--limit N]                 # usage over time
+agent-cdp memory usage leak-signal                       # heuristic leak indicator
 ```
 
-Use `js-memory` for quick "is heap growing?" checks. Use `mem-snapshot` for
+Use `memory usage` for quick "is heap growing?" checks. Use `memory snapshot` for
 deep object-level analysis.
 
 ## JS allocation profiler
@@ -199,22 +191,22 @@ the raw sampling profile to the LLM by default.
 
 ```bash
 # Record
-agent-cdp js-allocation start [--name NAME] [--interval BYTES] [--stack-depth N] [--include-major-gc] [--include-minor-gc]
+agent-cdp memory allocation start [--name NAME] [--interval BYTES] [--stack-depth N] [--include-major-gc] [--include-minor-gc]
 # ... run the workload you suspect is leaking ...
-agent-cdp js-allocation stop
+agent-cdp memory allocation stop
 
 # Inspect
-agent-cdp js-allocation status
-agent-cdp js-allocation list [--limit N] [--offset N]
-agent-cdp js-allocation summary [--session ID]
-agent-cdp js-allocation hotspots [--session ID] [--limit N] [--offset N] [--sort bytes|samples]
-agent-cdp js-allocation bucketed [--session ID] [--limit N]
-agent-cdp js-allocation leak-signal [--session ID]
-agent-cdp js-allocation export --file PATH [--session ID]
+agent-cdp memory allocation status
+agent-cdp memory allocation list [--limit N] [--offset N]
+agent-cdp memory allocation summary [--session ID]
+agent-cdp memory allocation hotspots [--session ID] [--limit N] [--offset N] [--sort bytes|samples]
+agent-cdp memory allocation bucketed [--session ID] [--limit N]
+agent-cdp memory allocation leak-signal [--session ID]
+agent-cdp memory allocation export --file PATH [--session ID]
 ```
 
-Use `js-allocation` when you need a compact leak-oriented summary of allocation
-pressure. Use `mem-snapshot` when you need proof that objects are still retained
+Use `memory allocation` when you need a compact leak-oriented summary of allocation
+pressure. Use `memory snapshot` when you need proof that objects are still retained
 after cleanup.
 
 ## JS allocation timeline
@@ -225,21 +217,21 @@ trace data.
 
 ```bash
 # Record
-agent-cdp js-allocation-timeline start [--name NAME]
+agent-cdp memory allocation-timeline start [--name NAME]
 # ... run the leaking interaction ...
-agent-cdp js-allocation-timeline stop
+agent-cdp memory allocation-timeline stop
 
 # Inspect
-agent-cdp js-allocation-timeline status
-agent-cdp js-allocation-timeline list [--limit N] [--offset N]
-agent-cdp js-allocation-timeline summary [--session ID]
-agent-cdp js-allocation-timeline buckets [--session ID] [--limit N]
-agent-cdp js-allocation-timeline hotspots [--session ID] [--limit N] [--offset N]
-agent-cdp js-allocation-timeline leak-signal [--session ID]
-agent-cdp js-allocation-timeline export --file PATH [--session ID]
+agent-cdp memory allocation-timeline status
+agent-cdp memory allocation-timeline list [--limit N] [--offset N]
+agent-cdp memory allocation-timeline summary [--session ID]
+agent-cdp memory allocation-timeline buckets [--session ID] [--limit N]
+agent-cdp memory allocation-timeline hotspots [--session ID] [--limit N] [--offset N]
+agent-cdp memory allocation-timeline leak-signal [--session ID]
+agent-cdp memory allocation-timeline export --file PATH [--session ID]
 ```
 
-Use `js-allocation-timeline` when you need a heavier-weight timeline capture
+Use `memory allocation-timeline` when you need a heavier-weight timeline capture
 that tracks heap growth during the interaction and ties the result to a final
 heap snapshot with allocation traces.
 
@@ -249,32 +241,32 @@ Sampling CPU profiler with source-map support.
 
 ```bash
 # Record
-agent-cdp js-profile start [--name NAME] [--interval US]   # start profiling (default 100µs interval)
+agent-cdp profile cpu start [--name NAME] [--interval US]   # start profiling (default 100µs interval)
 # ... run the workload ...
-agent-cdp js-profile stop                                   # stop and save
+agent-cdp profile cpu stop                                   # stop and save
 
 # Inspect
-agent-cdp js-profile status                                 # check if recording
-agent-cdp js-profile list [--limit N] [--offset N]         # list sessions
-agent-cdp js-profile summary [--session ID]                 # top-level stats
-agent-cdp js-profile hotspots [--session ID] [--limit N] [--offset N] [--sort selfMs|totalMs] [--min-self-ms N] [--include-runtime]
-agent-cdp js-profile hotspot --id HOTSPOT_ID [--session ID] [--stack-limit N]
-agent-cdp js-profile modules [--session ID] [--limit N] [--offset N] [--sort selfMs|totalMs]
-agent-cdp js-profile stacks [--session ID] [--limit N] [--offset N] [--min-ms N] [--max-depth N]
-agent-cdp js-profile slice --start MS --end MS [--session ID] [--limit N]
-agent-cdp js-profile diff --base SESSION_ID --compare SESSION_ID [--limit N] [--min-delta-pct N]
-agent-cdp js-profile export [--session ID]
-agent-cdp js-profile source-maps [--session ID]
+agent-cdp profile cpu status                                 # check if recording
+agent-cdp profile cpu list [--limit N] [--offset N]         # list sessions
+agent-cdp profile cpu summary [--session ID]                 # top-level stats
+agent-cdp profile cpu hotspots [--session ID] [--limit N] [--offset N] [--sort selfMs|totalMs] [--min-self-ms N] [--include-runtime]
+agent-cdp profile cpu hotspot --id HOTSPOT_ID [--session ID] [--stack-limit N]
+agent-cdp profile cpu modules [--session ID] [--limit N] [--offset N] [--sort selfMs|totalMs]
+agent-cdp profile cpu stacks [--session ID] [--limit N] [--offset N] [--min-ms N] [--max-depth N]
+agent-cdp profile cpu slice --start MS --end MS [--session ID] [--limit N]
+agent-cdp profile cpu diff --base SESSION_ID --compare SESSION_ID [--limit N] [--min-delta-pct N]
+agent-cdp profile cpu export [--session ID]
+agent-cdp profile cpu source-maps [--session ID]
 ```
 
 ### CPU profiling workflow
 
 ```bash
-agent-cdp js-profile start --name before-optimization
+agent-cdp profile cpu start --name before-optimization
 # ... run the workload you want to profile ...
-agent-cdp js-profile stop
-agent-cdp js-profile hotspots --sort selfMs --limit 20
-agent-cdp js-profile hotspot --id <HOTSPOT_ID>    # drill into a specific hotspot
+agent-cdp profile cpu stop
+agent-cdp profile cpu hotspots --sort selfMs --limit 20
+agent-cdp profile cpu hotspot --id <HOTSPOT_ID>    # drill into a specific hotspot
 ```
 
 `--interval US` sets the sampling interval in microseconds (default 100).
@@ -313,6 +305,6 @@ Commands that take `--snapshot ID` or `--session ID` expect the numeric ID
 shown in `list` output, not the human-readable name.
 
 **Source maps not resolving**
-Run `agent-cdp js-profile source-maps [--session ID]` to check which source
+Run `agent-cdp profile cpu source-maps [--session ID]` to check which source
 maps were found. Source maps must be accessible at the paths referenced in
 the profile.

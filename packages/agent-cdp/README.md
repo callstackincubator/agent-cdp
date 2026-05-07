@@ -94,12 +94,11 @@ agent-cdp target clear
 - **Runtime** — evaluate expressions, inspect returned object handles, and release preserved inspector references: `runtime eval`, `runtime props`, `runtime release`, `runtime release-group`
 - **Network** — bounded live capture plus persisted sessions: `network status`, `network start`, `network summary`, `network list`, `network request`, `network request-headers`, `network response-headers`, `network request-body`, `network response-body`
 - **Trace** — explicit trace capture plus in-memory session analysis for `performance.measure`, `performance.mark`, `console.timeStamp`, and custom DevTools tracks: `trace start`, `trace stop`, `trace summary`, `trace tracks`, `trace entries`, `trace entry`
-- **Memory (raw)** — `memory capture --file PATH` for a heap snapshot file
-- **Heap snapshot tools** — `mem-snapshot` commands to capture, load, summarize, diff snapshots, inspect classes/instances/retainers, and triage leak-style comparisons
-- **JS heap monitor** — `js-memory` commands for sampling, summaries, diffs, trends, and leak-oriented signals
-- **JS allocation profiler** — `js-allocation` commands for sampled allocation timeline summaries, top allocators, bucketed growth, leak-oriented signals, and raw artifact export
-- **JS allocation timeline** — `js-allocation-timeline` commands for DevTools-style heap allocation timeline capture, bucket summaries, linked final snapshot analysis, and raw artifact export
-- **JS profiler** — `js-profile` commands to record CPU profiles, list sessions, hotspots, stacks, diffs, and optional source map help
+- **Memory snapshots** — `memory snapshot` commands to capture, load, summarize, diff snapshots, inspect classes/instances/retainers, and triage leak-style comparisons
+- **Memory usage** — `memory usage` commands for sampling, summaries, diffs, trends, and leak-oriented signals
+- **Memory allocation** — `memory allocation` commands for sampled allocation timeline summaries, top allocators, bucketed growth, leak-oriented signals, and raw artifact export
+- **Memory allocation timeline** — `memory allocation-timeline` commands for DevTools-style heap allocation timeline capture, bucket summaries, linked final snapshot analysis, and raw artifact export
+- **CPU profiling** — `profile cpu` commands to record CPU profiles, list sessions, hotspots, stacks, diffs, and optional source map help
 
 **4. Stop the daemon**
 
@@ -109,7 +108,7 @@ agent-cdp stop
 
 ## Command overview
 
-Commands are grouped as **daemon**, **target**, **console**, **runtime**, **network**, **trace**, **memory**, **mem-snapshot**, **js-memory**, **js-allocation**, **js-allocation-timeline**, **js-profile**, and **skills** (bundled reference files). See `agent-cdp --help` for exact syntax and options.
+Commands are grouped as **daemon**, **target**, **console**, **runtime**, **network**, **trace**, **memory** (`snapshot`, `usage`, `allocation`, `allocation-timeline`), **profile** (`cpu`), and **skills** (bundled reference files). See `agent-cdp --help` for exact syntax and options.
 
 ## Runtime inspection
 

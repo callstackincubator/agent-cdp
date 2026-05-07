@@ -183,7 +183,7 @@ export class HeapSnapshotManager {
       throw new Error(
         snapshotId
           ? `Snapshot ${snapshotId} not found`
-          : "No heap snapshots available. Run mem-snapshot capture or mem-snapshot load first.",
+          : "No heap snapshots available. Run memory snapshot capture or memory snapshot load first.",
       );
     }
     return snap;

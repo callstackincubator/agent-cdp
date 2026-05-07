@@ -7,7 +7,8 @@ import { ensureTargetSelected } from "../context.js";
 import { getVerbose, parseFloatNumber, parseInteger, parseRequiredFloat, registerCommandGroupHelp, unwrapResponse } from "../shared.js";
 
 export function registerProfilingCommands(program: Command, deps: CliDeps): void {
-  const allocation = registerCommandGroupHelp(program.command("js-allocation").description("JS allocation profiler commands"));
+  const memory = program.commands.find((command) => command.name() === "memory") ?? registerCommandGroupHelp(program.command("memory").description("Memory inspection commands"));
+  const allocation = registerCommandGroupHelp(memory.command("allocation").description("JS allocation profiler commands"));
 
   allocation.command("start").option("--name <name>").option("--interval <bytes>").option("--stack-depth <n>").option("--include-major-gc").option("--include-minor-gc").action(async (options: Record<string, string | boolean | undefined>) => {
     await ensureTargetSelected(deps);
@@ -85,7 +86,7 @@ export function registerProfilingCommands(program: Command, deps: CliDeps): void
     console.log(formatJsSourceMaps(data as Parameters<typeof formatJsSourceMaps>[0], getVerbose(command)));
   });
 
-  const timeline = registerCommandGroupHelp(program.command("js-allocation-timeline").description("JS allocation timeline commands"));
+  const timeline = registerCommandGroupHelp(memory.command("allocation-timeline").description("JS allocation timeline commands"));
 
   timeline.command("start").option("--name <name>").action(async (options: { name?: string }) => {
     await ensureTargetSelected(deps);
@@ -150,39 +151,40 @@ export function registerProfilingCommands(program: Command, deps: CliDeps): void
     console.log(formatJsSourceMaps(data as Parameters<typeof formatJsSourceMaps>[0], getVerbose(command)));
   });
 
-  const profile = registerCommandGroupHelp(program.command("js-profile").description("JS profile commands"));
+  const profile = registerCommandGroupHelp(program.command("profile").description("Profiling commands"));
+  const cpu = registerCommandGroupHelp(profile.command("cpu").description("JS CPU profile commands"));
 
-  profile.command("start").option("--name <name>").option("--interval <us>").action(async (options: { name?: string; interval?: string }) => {
+  cpu.command("start").option("--name <name>").option("--interval <us>").action(async (options: { name?: string; interval?: string }) => {
     await ensureTargetSelected(deps);
     unwrapResponse(await deps.sendCommand({ type: "js-profile-start", name: options.name, samplingIntervalUs: parseInteger(options.interval) }), "Failed to start JS profile");
     console.log("JS profile started");
   });
 
-  profile.command("stop").action(async () => {
+  cpu.command("stop").action(async () => {
     await ensureTargetSelected(deps);
     const data = unwrapResponse(await deps.sendCommand({ type: "js-profile-stop" }), "Failed to stop JS profile");
     console.log(`JS profile stopped. Session ID: ${data as string}`);
   });
 
-  profile.command("status").action(async (_options, command) => {
+  cpu.command("status").action(async (_options, command) => {
     await deps.ensureDaemon();
     const data = unwrapResponse(await deps.sendCommand({ type: "js-profile-status" }), "Failed to get JS profile status");
     console.log(formatJsProfileStatus(data as Parameters<typeof formatJsProfileStatus>[0], getVerbose(command)));
   });
 
-  profile.command("list").option("--limit <n>").option("--offset <n>").action(async (options: { limit?: string; offset?: string }, command) => {
+  cpu.command("list").option("--limit <n>").option("--offset <n>").action(async (options: { limit?: string; offset?: string }, command) => {
     await deps.ensureDaemon();
     const data = unwrapResponse(await deps.sendCommand({ type: "js-profile-list-sessions", limit: parseInteger(options.limit), offset: parseInteger(options.offset) }), "Failed to list JS profile sessions");
     console.log(formatJsSessionList(data as Parameters<typeof formatJsSessionList>[0], getVerbose(command)));
   });
 
-  profile.command("summary").option("--session <id>").action(async (options: { session?: string }, command) => {
+  cpu.command("summary").option("--session <id>").action(async (options: { session?: string }, command) => {
     await deps.ensureDaemon();
     const data = unwrapResponse(await deps.sendCommand({ type: "js-profile-summary", sessionId: options.session }), "Failed to get JS profile summary");
     console.log(formatJsProfileSummary(data as Parameters<typeof formatJsProfileSummary>[0], getVerbose(command)));
   });
 
-  profile.command("hotspots").option("--session <id>").option("--limit <n>").option("--offset <n>").option("--sort <sort>").option("--min-self-ms <ms>").option("--include-runtime").action(async (options: Record<string, string | boolean | undefined>, command) => {
+  cpu.command("hotspots").option("--session <id>").option("--limit <n>").option("--offset <n>").option("--sort <sort>").option("--min-self-ms <ms>").option("--include-runtime").action(async (options: Record<string, string | boolean | undefined>, command) => {
     await deps.ensureDaemon();
     const data = unwrapResponse(
       await deps.sendCommand({
@@ -199,45 +201,45 @@ export function registerProfilingCommands(program: Command, deps: CliDeps): void
     console.log(formatJsHotspots(data as Parameters<typeof formatJsHotspots>[0], getVerbose(command)));
   });
 
-  profile.command("hotspot").requiredOption("--id <id>").option("--session <id>").option("--stack-limit <n>").action(async (options: { id: string; session?: string; stackLimit?: string }, command) => {
+  cpu.command("hotspot").requiredOption("--id <id>").option("--session <id>").option("--stack-limit <n>").action(async (options: { id: string; session?: string; stackLimit?: string }, command) => {
     await deps.ensureDaemon();
     const data = unwrapResponse(await deps.sendCommand({ type: "js-profile-hotspot", hotspotId: options.id, sessionId: options.session, stackLimit: parseInteger(options.stackLimit) }), "Failed to get JS profile hotspot");
     console.log(formatJsHotspotDetail(data as Parameters<typeof formatJsHotspotDetail>[0], getVerbose(command)));
   });
 
-  profile.command("modules").option("--session <id>").option("--limit <n>").option("--offset <n>").option("--sort <sort>").action(async (options: { session?: string; limit?: string; offset?: string; sort?: string }, command) => {
+  cpu.command("modules").option("--session <id>").option("--limit <n>").option("--offset <n>").option("--sort <sort>").action(async (options: { session?: string; limit?: string; offset?: string; sort?: string }, command) => {
     await deps.ensureDaemon();
     const data = unwrapResponse(await deps.sendCommand({ type: "js-profile-modules", sessionId: options.session, limit: parseInteger(options.limit), offset: parseInteger(options.offset), sortBy: options.sort }), "Failed to get JS profile modules");
     console.log(formatJsModules(data as Parameters<typeof formatJsModules>[0], getVerbose(command)));
   });
 
-  profile.command("stacks").option("--session <id>").option("--limit <n>").option("--offset <n>").option("--min-ms <ms>").option("--max-depth <n>").action(async (options: { session?: string; limit?: string; offset?: string; minMs?: string; maxDepth?: string }, command) => {
+  cpu.command("stacks").option("--session <id>").option("--limit <n>").option("--offset <n>").option("--min-ms <ms>").option("--max-depth <n>").action(async (options: { session?: string; limit?: string; offset?: string; minMs?: string; maxDepth?: string }, command) => {
     await deps.ensureDaemon();
     const data = unwrapResponse(await deps.sendCommand({ type: "js-profile-stacks", sessionId: options.session, limit: parseInteger(options.limit), offset: parseInteger(options.offset), minMs: parseFloatNumber(options.minMs), maxDepth: parseInteger(options.maxDepth) }), "Failed to get JS profile stacks");
     console.log(formatJsStacks(data as Parameters<typeof formatJsStacks>[0], getVerbose(command)));
   });
 
-  profile.command("slice").requiredOption("--start <ms>").requiredOption("--end <ms>").option("--session <id>").option("--limit <n>").action(async (options: { start: string; end: string; session?: string; limit?: string }, command) => {
+  cpu.command("slice").requiredOption("--start <ms>").requiredOption("--end <ms>").option("--session <id>").option("--limit <n>").action(async (options: { start: string; end: string; session?: string; limit?: string }, command) => {
     await deps.ensureDaemon();
-    const startMs = parseRequiredFloat(options.start, "Usage: agent-cdp js-profile slice --start MS --end MS");
-    const endMs = parseRequiredFloat(options.end, "Usage: agent-cdp js-profile slice --start MS --end MS");
+    const startMs = parseRequiredFloat(options.start, "Usage: agent-cdp profile cpu slice --start MS --end MS");
+    const endMs = parseRequiredFloat(options.end, "Usage: agent-cdp profile cpu slice --start MS --end MS");
     const data = unwrapResponse(await deps.sendCommand({ type: "js-profile-slice", startMs, endMs, sessionId: options.session, limit: parseInteger(options.limit) }), "Failed to get JS profile slice");
     console.log(formatJsSlice(data as Parameters<typeof formatJsSlice>[0], getVerbose(command)));
   });
 
-  profile.command("diff").requiredOption("--base <id>").requiredOption("--compare <id>").option("--limit <n>").option("--min-delta-pct <pct>").action(async (options: { base: string; compare: string; limit?: string; minDeltaPct?: string }, command) => {
+  cpu.command("diff").requiredOption("--base <id>").requiredOption("--compare <id>").option("--limit <n>").option("--min-delta-pct <pct>").action(async (options: { base: string; compare: string; limit?: string; minDeltaPct?: string }, command) => {
     await deps.ensureDaemon();
     const data = unwrapResponse(await deps.sendCommand({ type: "js-profile-diff", baseSessionId: options.base, compareSessionId: options.compare, limit: parseInteger(options.limit), minDeltaPct: parseFloatNumber(options.minDeltaPct) }), "Failed to diff JS profile sessions");
     console.log(formatJsDiff(data as Parameters<typeof formatJsDiff>[0], getVerbose(command)));
   });
 
-  profile.command("export").option("--session <id>").action(async (options: { session?: string }) => {
+  cpu.command("export").option("--session <id>").action(async (options: { session?: string }) => {
     await deps.ensureDaemon();
     const data = unwrapResponse(await deps.sendCommand({ type: "js-profile-export", sessionId: options.session }), "Failed to export JS profile");
     console.log(JSON.stringify(data, null, 2));
   });
 
-  profile.command("source-maps").option("--session <id>").action(async (options: { session?: string }, command) => {
+  cpu.command("source-maps").option("--session <id>").action(async (options: { session?: string }, command) => {
     await deps.ensureDaemon();
     const data = unwrapResponse(await deps.sendCommand({ type: "js-profile-source-maps", sessionId: options.session }), "Failed to get source map info");
     console.log(formatJsSourceMaps(data as Parameters<typeof formatJsSourceMaps>[0], getVerbose(command)));

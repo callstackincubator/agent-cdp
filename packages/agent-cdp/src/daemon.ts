@@ -8,7 +8,6 @@ import { JsAllocationProfiler } from "./js-allocation/index.js";
 import { JsAllocationTimelineProfiler } from "./js-allocation-timeline/index.js";
 import { JsHeapUsageMonitor } from "./js-memory/index.js";
 import { JsProfiler } from "./js-profiler/index.js";
-import { MemorySnapshotter } from "./memory.js";
 import { NetworkManager } from "./network/index.js";
 import { createTargetProviders } from "./providers.js";
 import { RuntimeManager } from "./runtime/index.js";
@@ -45,7 +44,6 @@ export function getConnectionErrorMessage(selectedTarget: { id: string } | null)
 class Daemon {
   private readonly startedAt = Date.now();
   private readonly consoleCollector = new ConsoleCollector();
-  private readonly memorySnapshotter = new MemorySnapshotter();
   private readonly networkManager = new NetworkManager();
   private readonly heapSnapshotManager = new HeapSnapshotManager();
   private readonly jsAllocationProfiler = new JsAllocationProfiler();
@@ -350,11 +348,6 @@ class Daemon {
 
       if (command.type === "trace-entry") {
         return { ok: true, data: this.traceManager.getEntry(command.entryId, command.sessionId) };
-      }
-
-      if (command.type === "capture-memory") {
-        const session = await this.requireSession();
-        return { ok: true, data: await this.memorySnapshotter.capture(session, command.filePath) };
       }
 
       if (command.type === "js-profile-start") {
