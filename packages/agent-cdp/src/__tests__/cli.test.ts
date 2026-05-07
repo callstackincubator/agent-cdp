@@ -29,6 +29,19 @@ describe("cli", () => {
     logSpy.mockRestore();
   });
 
+  it("prints subcommand help without failing for bare command groups", async () => {
+    await expect(main(["memory"])).resolves.toBeUndefined();
+  });
+
+  it("treats --version as a normal successful exit", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(main(["--version"])).resolves.toBeUndefined();
+
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
   it("does not print usage for unknown commands", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -40,6 +53,54 @@ describe("cli", () => {
 
     logSpy.mockRestore();
     errorSpy.mockRestore();
+  });
+
+  it("allows help-like tokens as option values", async () => {
+    const ensureDaemonMock = vi.fn().mockResolvedValue(undefined);
+    const sendCommandMock = vi.fn(async (command: IpcCommand): Promise<IpcResponse> => {
+      if (command.type === "runtime-eval") {
+        return {
+          ok: true,
+          data: {
+            type: "string",
+            value: "ok",
+            description: "ok",
+            objectGroup: "agent-cdp-runtime",
+            hadSideEffect: false,
+          },
+        };
+      }
+
+      if (command.type === "runtime-release-object-group") {
+        return { ok: true, data: null };
+      }
+
+      throw new Error(`Unexpected command: ${command.type}`);
+    });
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main(["runtime", "eval", "--expr", "--help"], {
+      ensureDaemon: ensureDaemonMock,
+      sendCommand: sendCommandMock,
+      stopDaemon: vi.fn(),
+    });
+    await main(["runtime", "release-group", "--group", "-h"], {
+      ensureDaemon: ensureDaemonMock,
+      sendCommand: sendCommandMock,
+      stopDaemon: vi.fn(),
+    });
+
+    expect(sendCommandMock).toHaveBeenNthCalledWith(1, {
+      type: "runtime-eval",
+      expression: "--help",
+      awaitPromise: false,
+    });
+    expect(sendCommandMock).toHaveBeenNthCalledWith(2, {
+      type: "runtime-release-object-group",
+      objectGroup: "-h",
+    });
+
+    logSpy.mockRestore();
   });
 
   it("dispatches representative commands through commander", async () => {

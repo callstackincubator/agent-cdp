@@ -4,7 +4,7 @@ import { formatTraceEntries, formatTraceEntry, formatTraceSessionList, formatTra
 import type { TraceEntriesResult, TraceEntry, TraceSessionListEntry, TraceStatusResult, TraceStopResult, TraceSummaryResult, TraceTracksResult } from "../../trace/types.js";
 import type { CliDeps } from "../context.js";
 import { ensureTargetSelected } from "../context.js";
-import { getVerbose, parseFloatNumber, parseInteger, unwrapResponse } from "../shared.js";
+import { getVerbose, parseFloatNumber, parseInteger, registerCommandGroupHelp, unwrapResponse } from "../shared.js";
 
 function readTraceStatus(data: unknown): TraceStatusResult {
   return data as TraceStatusResult;
@@ -35,7 +35,7 @@ function readTraceEntry(data: unknown): TraceEntry {
 }
 
 export function registerNetworkAndTraceCommands(program: Command, deps: CliDeps): void {
-  const network = program.command("network").description("Network inspection commands");
+  const network = registerCommandGroupHelp(program.command("network").description("Network inspection commands"));
 
   network.command("status").action(async (_options, command) => {
     await deps.ensureDaemon();
@@ -161,7 +161,7 @@ export function registerNetworkAndTraceCommands(program: Command, deps: CliDeps)
     console.log(formatNetworkBody(data as Parameters<typeof formatNetworkBody>[0]));
   });
 
-  const trace = program.command("trace").description("Trace commands");
+  const trace = registerCommandGroupHelp(program.command("trace").description("Trace commands"));
 
   trace.command("start").action(async () => {
     await ensureTargetSelected(deps);

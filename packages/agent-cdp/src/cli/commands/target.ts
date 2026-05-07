@@ -2,10 +2,10 @@ import { Command } from "commander";
 import { formatTargetList } from "../../formatters.js";
 import type { CliDeps } from "../context.js";
 import { discoveryOptions, readTargets } from "../context.js";
-import { getVerbose, unwrapResponse } from "../shared.js";
+import { getVerbose, registerCommandGroupHelp, unwrapResponse } from "../shared.js";
 
 export function registerTargetCommands(program: Command, deps: CliDeps): void {
-  const target = program.command("target").description("Target selection commands");
+  const target = registerCommandGroupHelp(program.command("target").description("Target selection commands"));
 
   target
     .command("list")

@@ -4,10 +4,10 @@ import { formatJsAllocationTimelineBuckets, formatJsAllocationTimelineExport, fo
 import { formatJsDiff, formatJsHotspotDetail, formatJsHotspots, formatJsModules, formatJsProfileStatus, formatJsProfileSummary, formatJsSessionList, formatJsSlice, formatJsSourceMaps, formatJsStacks } from "../../js-profiler/formatters.js";
 import type { CliDeps } from "../context.js";
 import { ensureTargetSelected } from "../context.js";
-import { getVerbose, parseFloatNumber, parseInteger, parseRequiredFloat, unwrapResponse } from "../shared.js";
+import { getVerbose, parseFloatNumber, parseInteger, parseRequiredFloat, registerCommandGroupHelp, unwrapResponse } from "../shared.js";
 
 export function registerProfilingCommands(program: Command, deps: CliDeps): void {
-  const allocation = program.command("js-allocation").description("JS allocation profiler commands");
+  const allocation = registerCommandGroupHelp(program.command("js-allocation").description("JS allocation profiler commands"));
 
   allocation.command("start").option("--name <name>").option("--interval <bytes>").option("--stack-depth <n>").option("--include-major-gc").option("--include-minor-gc").action(async (options: Record<string, string | boolean | undefined>) => {
     await ensureTargetSelected(deps);
@@ -85,7 +85,7 @@ export function registerProfilingCommands(program: Command, deps: CliDeps): void
     console.log(formatJsSourceMaps(data as Parameters<typeof formatJsSourceMaps>[0], getVerbose(command)));
   });
 
-  const timeline = program.command("js-allocation-timeline").description("JS allocation timeline commands");
+  const timeline = registerCommandGroupHelp(program.command("js-allocation-timeline").description("JS allocation timeline commands"));
 
   timeline.command("start").option("--name <name>").action(async (options: { name?: string }) => {
     await ensureTargetSelected(deps);
@@ -150,7 +150,7 @@ export function registerProfilingCommands(program: Command, deps: CliDeps): void
     console.log(formatJsSourceMaps(data as Parameters<typeof formatJsSourceMaps>[0], getVerbose(command)));
   });
 
-  const profile = program.command("js-profile").description("JS profile commands");
+  const profile = registerCommandGroupHelp(program.command("js-profile").description("JS profile commands"));
 
   profile.command("start").option("--name <name>").option("--interval <us>").action(async (options: { name?: string; interval?: string }) => {
     await ensureTargetSelected(deps);

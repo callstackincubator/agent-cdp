@@ -6,14 +6,14 @@ import { formatJsMemoryDiff, formatJsMemoryLeakSignal, formatJsMemoryList, forma
 import type { MemorySnapshotSummary } from "../../types.js";
 import type { CliDeps } from "../context.js";
 import { ensureTargetSelected } from "../context.js";
-import { getVerbose, parseInteger, parseRequiredInteger, unwrapResponse } from "../shared.js";
+import { getVerbose, parseInteger, parseRequiredInteger, registerCommandGroupHelp, unwrapResponse } from "../shared.js";
 
 function readMemorySummary(data: unknown): MemorySnapshotSummary {
   return data as MemorySnapshotSummary;
 }
 
 export function registerMemoryCommands(program: Command, deps: CliDeps): void {
-  const memory = program.command("memory").description("Raw memory capture commands");
+  const memory = registerCommandGroupHelp(program.command("memory").description("Raw memory capture commands"));
 
   memory.command("capture").requiredOption("--file <path>").action(async (options: { file: string }, command) => {
     await ensureTargetSelected(deps);
@@ -21,7 +21,7 @@ export function registerMemoryCommands(program: Command, deps: CliDeps): void {
     console.log(formatMemorySummary(readMemorySummary(data), getVerbose(command)));
   });
 
-  const snapshot = program.command("mem-snapshot").description("Heap snapshot analysis commands");
+  const snapshot = registerCommandGroupHelp(program.command("mem-snapshot").description("Heap snapshot analysis commands"));
 
   snapshot.command("capture").option("--name <name>").option("--gc").option("--file <path>").action(async (options: { name?: string; gc?: boolean; file?: string }, command) => {
     await ensureTargetSelected(deps);
@@ -120,7 +120,7 @@ export function registerMemoryCommands(program: Command, deps: CliDeps): void {
     console.log(formatMemLeakCandidates(data as Parameters<typeof formatMemLeakCandidates>[0], getVerbose(command)));
   });
 
-  const jsMemory = program.command("js-memory").description("JS heap usage monitor commands");
+  const jsMemory = registerCommandGroupHelp(program.command("js-memory").description("JS heap usage monitor commands"));
 
   jsMemory.command("sample").option("--label <label>").option("--gc").action(async (options: { label?: string; gc?: boolean }, command) => {
     await ensureTargetSelected(deps);

@@ -1,6 +1,12 @@
 import type { Command } from "commander";
 import type { IpcResponse } from "../types.js";
 
+export function registerCommandGroupHelp(command: Command): Command {
+  return command.action((_options, currentCommand) => {
+    currentCommand.help();
+  });
+}
+
 export function getVerbose(command: Command): boolean {
   const options = command.optsWithGlobals() as { verbose?: boolean };
   return options.verbose === true;

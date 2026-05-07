@@ -4,7 +4,7 @@ import type { ConsoleMessage } from "../../types.js";
 import { DEFAULT_RUNTIME_OBJECT_GROUP, formatRuntimeEval, formatRuntimeEvalJson, formatRuntimeProperties } from "../../runtime/index.js";
 import type { CliDeps } from "../context.js";
 import { ensureTargetSelected } from "../context.js";
-import { getVerbose, parseRequiredInteger, unwrapResponse } from "../shared.js";
+import { getVerbose, parseRequiredInteger, registerCommandGroupHelp, unwrapResponse } from "../shared.js";
 
 function readConsoleMessages(data: unknown): ConsoleMessage[] {
   return data as ConsoleMessage[];
@@ -15,7 +15,7 @@ function readConsoleMessage(data: unknown): ConsoleMessage {
 }
 
 export function registerRuntimeAndConsoleCommands(program: Command, deps: CliDeps): void {
-  const consoleCommand = program.command("console").description("Console capture commands");
+  const consoleCommand = registerCommandGroupHelp(program.command("console").description("Console capture commands"));
 
   consoleCommand
     .command("list")
@@ -34,7 +34,7 @@ export function registerRuntimeAndConsoleCommands(program: Command, deps: CliDep
     console.log(formatConsoleMessage(readConsoleMessage(data), getVerbose(command)));
   });
 
-  const runtime = program.command("runtime").description("Runtime inspection commands");
+  const runtime = registerCommandGroupHelp(program.command("runtime").description("Runtime inspection commands"));
 
   runtime
     .command("eval")
