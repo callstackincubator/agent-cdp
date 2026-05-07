@@ -29,6 +29,19 @@ describe("cli", () => {
     logSpy.mockRestore();
   });
 
+  it("does not print usage for unknown commands", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(main(["nope"])).rejects.toThrow(/unknown command/i);
+
+    expect(logSpy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalledWith(usage());
+
+    logSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
   it("dispatches representative commands through commander", async () => {
     const ensureDaemonMock = vi.fn().mockResolvedValue(undefined);
     const sendCommandMock = vi.fn(async (command: IpcCommand): Promise<IpcResponse> => {

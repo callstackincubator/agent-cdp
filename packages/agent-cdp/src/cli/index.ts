@@ -1,4 +1,3 @@
-import { CommanderError } from "commander";
 import type { CliDeps } from "./context.js";
 import { defaultCliDeps, ensureTargetSelected, MULTIPLE_TARGETS_AVAILABLE_MESSAGE } from "./context.js";
 import { usage } from "./help.js";
@@ -18,14 +17,5 @@ export async function main(argv = process.argv.slice(2), deps: CliDeps = default
 
   const program = createProgram(deps);
 
-  try {
-    await program.parseAsync(argv, { from: "user" });
-  } catch (error) {
-    if (error instanceof CommanderError) {
-      console.error(usage());
-      throw new Error(error.message);
-    }
-
-    throw error;
-  }
+  await program.parseAsync(argv, { from: "user" });
 }
