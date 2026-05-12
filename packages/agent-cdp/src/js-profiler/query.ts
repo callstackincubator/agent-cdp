@@ -1,4 +1,5 @@
 import type {
+  CdpProfile,
   JsDiffResult,
   JsHotspotDetailResult,
   JsHotspotsResult,
@@ -130,6 +131,7 @@ export interface HotspotsOptions {
   offset?: number;
   sortBy?: string;
   minSelfMs?: number;
+  minTotalMs?: number;
   includeRuntime?: boolean;
 }
 
@@ -142,6 +144,7 @@ export function queryHotspots(session: JsProfileSession, opts: HotspotsOptions):
     if (!frame) return false;
     if (!opts.includeRuntime && frame.isRuntime) return false;
     if (opts.minSelfMs !== undefined && h.selfTimeMs < opts.minSelfMs) return false;
+    if (opts.minTotalMs !== undefined && h.totalTimeMs < opts.minTotalMs) return false;
     return true;
   });
 
@@ -183,17 +186,21 @@ export function queryHotspotDetail(
     .slice(0, stackLimit)
     .map((s) => ({ stackId: s.stackId, percent: round1(s.percent), frames: s.frames }));
 
-  const activeTimeBuckets = session.timeBuckets
-    .filter((b) => b.topHotspotIds.includes(hotspotId))
-    .map((b) => ({ startMs: Math.round(b.startMs), endMs: Math.round(b.endMs), sampleCount: b.sampleCount }));
+  const averageSampleMs = session.sampleCount > 0 ? session.durationMs / session.sampleCount : 0;
+  const occurrence = summarizeOccurrences(session, hotspotId, averageSampleMs);
+  const { callers, callees } = summarizeRelations(session, frame.frameId);
+  const activeTimeBuckets = summarizeHotspotBuckets(session, hotspotId);
+  const delegatedTimeMs = Math.max(0, hotspot.totalTimeMs - hotspot.selfTimeMs);
 
   return {
     hotspot: {
       hotspotId: hotspot.hotspotId,
       selfTimeMs: round1(hotspot.selfTimeMs),
       totalTimeMs: round1(hotspot.totalTimeMs),
+      delegatedTimeMs: round1(delegatedTimeMs),
       selfPercent: round1(hotspot.selfPercent),
       totalPercent: round1(hotspot.totalPercent),
+      delegatedPercentOfTotal: round1(hotspot.totalTimeMs > 0 ? (delegatedTimeMs / hotspot.totalTimeMs) * 100 : 0),
       selfSampleCount: hotspot.selfSampleCount,
       totalSampleCount: hotspot.totalSampleCount,
     },
@@ -212,9 +219,152 @@ export function queryHotspotDetail(
       bundleColumnNumber: frame.bundleColumnNumber,
     },
     representativeStacks,
+    occurrence,
+    callers,
+    callees,
     activeTimeBuckets,
     caveats: CAVEATS_DEFAULT,
   };
+}
+
+function summarizeOccurrences(
+  session: JsProfileSession,
+  hotspotId: string,
+  averageSampleMs: number,
+): JsHotspotDetailResult["occurrence"] {
+  let runCount = 0;
+  let currentRunSamples = 0;
+  let longestRunSamples = 0;
+  let firstSeenMs: number | null = null;
+  let lastSeenMs: number | null = null;
+
+  for (let i = 0; i < session.sampleHotspotIds.length; i++) {
+    if (session.sampleHotspotIds[i] === hotspotId) {
+      currentRunSamples++;
+      if (firstSeenMs === null) firstSeenMs = session.sampleTimestampsMs[i] ?? null;
+      lastSeenMs = session.sampleTimestampsMs[i] ?? null;
+      continue;
+    }
+
+    if (currentRunSamples > 0) {
+      runCount++;
+      longestRunSamples = Math.max(longestRunSamples, currentRunSamples);
+      currentRunSamples = 0;
+    }
+  }
+
+  if (currentRunSamples > 0) {
+    runCount++;
+    longestRunSamples = Math.max(longestRunSamples, currentRunSamples);
+  }
+
+  const selfSamples = session.hotspotsById.get(hotspotId)?.selfSampleCount ?? 0;
+  return {
+    runCount,
+    averageRunSamples: round1(runCount > 0 ? selfSamples / runCount : 0),
+    averageRunMs: round1(runCount > 0 ? (selfSamples * averageSampleMs) / runCount : 0),
+    longestRunSamples,
+    longestRunMs: round1(longestRunSamples * averageSampleMs),
+    firstSeenMs: firstSeenMs === null ? null : Math.round(firstSeenMs),
+    lastSeenMs: lastSeenMs === null ? null : Math.round(lastSeenMs),
+  };
+}
+
+function summarizeRelations(
+  session: JsProfileSession,
+  frameId: string,
+): Pick<JsHotspotDetailResult, "callers" | "callees"> {
+  const profile = session.rawProfile as CdpProfile;
+  const parentById = new Map<number, number>();
+
+  for (const node of profile.nodes ?? []) {
+    for (const childId of node.children ?? []) parentById.set(childId, node.id);
+  }
+
+  const callerCounts = new Map<string, number>();
+  const calleeCounts = new Map<string, number>();
+
+  for (const sampleNodeId of profile.samples ?? []) {
+    let current: number | undefined = sampleNodeId;
+    const stackFrameIds: string[] = [];
+    const visited = new Set<number>();
+
+    while (current !== undefined && !visited.has(current)) {
+      visited.add(current);
+      const normalizedFrameId = session.rawNodeToFrameId.get(current);
+      if (normalizedFrameId) stackFrameIds.push(normalizedFrameId);
+      current = parentById.get(current);
+    }
+
+    const hotspotIndex = stackFrameIds.indexOf(frameId);
+    if (hotspotIndex === -1) continue;
+
+    const calleeFrameId = stackFrameIds[hotspotIndex - 1];
+    const callerFrameId = stackFrameIds[hotspotIndex + 1];
+
+    if (calleeFrameId && session.frames.get(calleeFrameId)?.isRuntime !== true) {
+      calleeCounts.set(calleeFrameId, (calleeCounts.get(calleeFrameId) ?? 0) + 1);
+    }
+
+    if (callerFrameId && session.frames.get(callerFrameId)?.isRuntime !== true) {
+      callerCounts.set(callerFrameId, (callerCounts.get(callerFrameId) ?? 0) + 1);
+    }
+  }
+
+  return {
+    callers: relationEntries(session, callerCounts),
+    callees: relationEntries(session, calleeCounts),
+  };
+}
+
+function relationEntries(
+  session: JsProfileSession,
+  counts: Map<string, number>,
+): Array<{ functionName: string; module: string; sampleCount: number; percent: number }> {
+  const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
+
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .flatMap(([frameId, sampleCount]) => {
+      const frame = session.frames.get(frameId);
+      if (!frame) return [];
+
+      return [{
+        functionName: frame.functionName,
+        module: frame.moduleName,
+        sampleCount,
+        percent: round1(total > 0 ? (sampleCount / total) * 100 : 0),
+      }];
+    });
+}
+
+function summarizeHotspotBuckets(
+  session: JsProfileSession,
+  hotspotId: string,
+): JsHotspotDetailResult["activeTimeBuckets"] {
+  const bucketCount = Math.max(session.timeBuckets.length, 1);
+  const bucketWidthMs = session.durationMs > 0 ? session.durationMs / bucketCount : 1;
+  const hotspotSamples = session.hotspotsById.get(hotspotId)?.selfSampleCount ?? 0;
+  const counts = Array.from({ length: bucketCount }, () => 0);
+
+  for (let i = 0; i < session.sampleHotspotIds.length; i++) {
+    if (session.sampleHotspotIds[i] !== hotspotId) continue;
+    const timestampMs = session.sampleTimestampsMs[i] ?? 0;
+    const bucketIndex = Math.min(Math.floor(timestampMs / bucketWidthMs), bucketCount - 1);
+    counts[bucketIndex]++;
+  }
+
+  return counts.flatMap((sampleCount, index) => {
+    if (sampleCount === 0) return [];
+
+    return [{
+      startMs: Math.round(index * bucketWidthMs),
+      endMs: Math.round((index + 1) * bucketWidthMs),
+      sampleCount,
+      percentOfHotspotSamples: round1(hotspotSamples > 0 ? (sampleCount / hotspotSamples) * 100 : 0),
+    }];
+  });
 }
 
 export interface ModulesOptions {

@@ -64,6 +64,7 @@ export function normalizeProfile(
 
   // Frame registry keyed by identity (original position when symbolicated, otherwise bundle)
   const frameByKey = new Map<string, JsFrame>();
+  const rawNodeToFrameId = new Map<number, string>();
   let frameCounter = 0;
 
   function makeFrameKey(
@@ -127,7 +128,10 @@ export function normalizeProfile(
     return frameByKey.get(key)!;
   }
 
-  for (const node of nodes) getOrCreateFrame(node);
+  for (const node of nodes) {
+    const frame = getOrCreateFrame(node);
+    rawNodeToFrameId.set(node.id, frame.frameId);
+  }
 
   // Ancestor chain for a node: leaf first, root last
   function getAncestors(nodeId: number): number[] {
@@ -339,6 +343,7 @@ export function normalizeProfile(
     timeBuckets,
     sampleTimestampsMs,
     sampleHotspotIds,
+    rawNodeToFrameId,
     rawProfile,
     sourceMaps,
   };

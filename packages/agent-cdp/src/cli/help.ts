@@ -101,7 +101,7 @@ CPU Profiling:
   profile cpu status
   profile cpu list [--limit N] [--offset N]
   profile cpu summary [--session ID]
-  profile cpu hotspots [--session ID] [--limit N] [--offset N] [--sort selfMs|totalMs] [--min-self-ms N] [--include-runtime]
+  profile cpu hotspots [--session ID] [--limit N] [--offset N] [--sort selfMs|totalMs] [--min-self-ms N] [--min-total-ms N] [--include-runtime]
   profile cpu hotspot --id HOTSPOT_ID [--session ID] [--stack-limit N]
   profile cpu modules [--session ID] [--limit N] [--offset N] [--sort selfMs|totalMs]
   profile cpu stacks [--session ID] [--limit N] [--offset N] [--min-ms N] [--max-depth N]
