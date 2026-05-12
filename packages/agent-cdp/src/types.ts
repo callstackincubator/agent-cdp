@@ -201,7 +201,7 @@ export type IpcCommand =
   | { type: "js-memory-summary" }
   | { type: "js-memory-diff"; baseSampleId: string; compareSampleId: string }
   | { type: "js-memory-trend"; limit?: number }
-  | { type: "js-memory-leak-signal" };
+  | { type: "js-memory-leak-signal"; sinceSampleId?: string };
 
 export interface IpcResponse {
   ok: boolean;

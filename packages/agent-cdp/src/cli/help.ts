@@ -68,7 +68,7 @@ Memory Usage:
   memory usage summary
   memory usage diff --base SAMPLE_ID --compare SAMPLE_ID
   memory usage trend [--limit N]
-  memory usage leak-signal
+  memory usage leak-signal [--since SAMPLE_ID]
 
 Memory Allocation:
   memory allocation start [--name NAME] [--interval BYTES] [--stack-depth N] [--include-major-gc] [--include-minor-gc]

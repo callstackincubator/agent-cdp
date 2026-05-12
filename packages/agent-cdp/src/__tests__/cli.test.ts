@@ -13,6 +13,7 @@ describe("cli", () => {
     expect(usage()).toContain("network list [--session ID] [--limit N] [--offset N]");
     expect(usage()).toContain("memory snapshot capture [--name NAME] [--gc] [--file PATH]");
     expect(usage()).toContain("memory usage summary");
+    expect(usage()).toContain("memory usage leak-signal [--since SAMPLE_ID]");
     expect(usage()).toContain("memory allocation hotspots [--session ID] [--limit N] [--offset N]");
     expect(usage()).toContain("memory allocation-timeline summary [--session ID]");
     expect(usage()).toContain("profile cpu hotspots [--session ID] [--limit N] [--offset N]");
@@ -163,6 +164,43 @@ describe("cli", () => {
       awaitPromise: false,
     });
     expect(sendCommandMock).toHaveBeenNthCalledWith(3, { type: "js-memory-summary" });
+
+    logSpy.mockRestore();
+  });
+
+  it("dispatches js-memory leak-signal with a bounded window", async () => {
+    const ensureDaemonMock = vi.fn().mockResolvedValue(undefined);
+    const sendCommandMock = vi.fn(async (command: IpcCommand): Promise<IpcResponse> => {
+      if (command.type === "js-memory-leak-signal") {
+        return {
+          ok: true,
+          data: {
+            suspicionScore: 0,
+            level: "none",
+            confidence: "low",
+            sampleCount: 2,
+            scope: "bounded",
+            windowStartSampleId: "jm_10",
+            windowEndSampleId: "jm_11",
+            evidence: [],
+            qualityNotes: [],
+            caveat: "heuristic",
+          },
+        };
+      }
+
+      throw new Error(`Unexpected command: ${command.type}`);
+    });
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const program = createProgram({
+      ensureDaemon: ensureDaemonMock,
+      sendCommand: sendCommandMock,
+      stopDaemon: vi.fn(),
+    });
+
+    await program.parseAsync(["memory", "usage", "leak-signal", "--since", "jm_10"], { from: "user" });
+
+    expect(sendCommandMock).toHaveBeenCalledWith({ type: "js-memory-leak-signal", sinceSampleId: "jm_10" });
 
     logSpy.mockRestore();
   });

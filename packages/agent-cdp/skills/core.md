@@ -177,11 +177,10 @@ agent-cdp memory usage list [--limit N] [--offset N]    # list all samples
 agent-cdp memory usage summary                           # overall stats
 agent-cdp memory usage diff --base SAMPLE_ID --compare SAMPLE_ID
 agent-cdp memory usage trend [--limit N]                 # usage over time
-agent-cdp memory usage leak-signal                       # heuristic leak indicator
+agent-cdp memory usage leak-signal [--since SAMPLE_ID]   # heuristic leak indicator for one bounded sample window
 ```
 
-Use `memory usage` for quick "is heap growing?" checks. Use `memory snapshot` for
-deep object-level analysis.
+Use `memory usage` for quick "is heap growing?" checks. Prefer a bounded workflow such as baseline -> action -> GC -> `leak-signal --since SAMPLE_ID` so old samples do not contaminate the result. Use `memory snapshot` for deep object-level analysis.
 
 ## JS allocation profiler
 
