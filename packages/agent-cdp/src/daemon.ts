@@ -681,7 +681,7 @@ class Daemon {
       }
 
       if (command.type === "js-memory-leak-signal") {
-        return { ok: true, data: this.jsHeapUsageMonitor.getLeakSignal() };
+        return { ok: true, data: this.jsHeapUsageMonitor.getLeakSignal(command.sinceSampleId) };
       }
 
       const status: StatusInfo = {

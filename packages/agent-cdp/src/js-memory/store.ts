@@ -28,6 +28,19 @@ export class JsMemoryStore {
     return [...this.samples];
   }
 
+  allSince(sampleId?: string): JsMemorySample[] {
+    if (!sampleId) {
+      return this.all();
+    }
+
+    const index = this.samples.findIndex((sample) => sample.sampleId === sampleId);
+    if (index === -1) {
+      throw new Error(`Sample ${sampleId} not found`);
+    }
+
+    return this.samples.slice(index);
+  }
+
   count(): number {
     return this.samples.length;
   }

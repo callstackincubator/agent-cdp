@@ -148,9 +148,12 @@ export function registerMemoryCommands(program: Command, deps: CliDeps): void {
     console.log(formatJsMemoryTrend(data as Parameters<typeof formatJsMemoryTrend>[0], getVerbose(command)));
   });
 
-  usage.command("leak-signal").action(async (_options, command) => {
+  usage.command("leak-signal").option("--since <sampleId>").action(async (options: { since?: string }, command) => {
     await deps.ensureDaemon();
-    const data = unwrapResponse(await deps.sendCommand({ type: "js-memory-leak-signal" }), "Failed to get JS memory leak signal");
+    const data = unwrapResponse(
+      await deps.sendCommand({ type: "js-memory-leak-signal", sinceSampleId: options.since }),
+      "Failed to get JS memory leak signal",
+    );
     console.log(formatJsMemoryLeakSignal(data as Parameters<typeof formatJsMemoryLeakSignal>[0], getVerbose(command)));
   });
 }
