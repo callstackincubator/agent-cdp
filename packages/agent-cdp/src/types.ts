@@ -145,7 +145,7 @@ export type IpcCommand =
   | { type: "js-profile-status" }
   | { type: "js-profile-list-sessions"; limit?: number; offset?: number }
   | { type: "js-profile-summary"; sessionId?: string }
-  | { type: "js-profile-hotspots"; sessionId?: string; limit?: number; offset?: number; sortBy?: string; minSelfMs?: number; includeRuntime?: boolean }
+  | { type: "js-profile-hotspots"; sessionId?: string; limit?: number; offset?: number; sortBy?: string; minSelfMs?: number; minTotalMs?: number; includeRuntime?: boolean }
   | { type: "js-profile-hotspot"; sessionId?: string; hotspotId: string; stackLimit?: number }
   | { type: "js-profile-modules"; sessionId?: string; limit?: number; offset?: number; sortBy?: string }
   | { type: "js-profile-stacks"; sessionId?: string; limit?: number; offset?: number; minMs?: number; maxDepth?: number }

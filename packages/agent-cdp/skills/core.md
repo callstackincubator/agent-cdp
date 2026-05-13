@@ -249,7 +249,7 @@ agent-cdp profile cpu stop                                   # stop and save
 agent-cdp profile cpu status                                 # check if recording
 agent-cdp profile cpu list [--limit N] [--offset N]         # list sessions
 agent-cdp profile cpu summary [--session ID]                 # top-level stats
-agent-cdp profile cpu hotspots [--session ID] [--limit N] [--offset N] [--sort selfMs|totalMs] [--min-self-ms N] [--include-runtime]
+agent-cdp profile cpu hotspots [--session ID] [--limit N] [--offset N] [--sort selfMs|totalMs] [--min-self-ms N] [--min-total-ms N] [--include-runtime]
 agent-cdp profile cpu hotspot --id HOTSPOT_ID [--session ID] [--stack-limit N]
 agent-cdp profile cpu modules [--session ID] [--limit N] [--offset N] [--sort selfMs|totalMs]
 agent-cdp profile cpu stacks [--session ID] [--limit N] [--offset N] [--min-ms N] [--max-depth N]
@@ -266,11 +266,15 @@ agent-cdp profile cpu start --name before-optimization
 # ... run the workload you want to profile ...
 agent-cdp profile cpu stop
 agent-cdp profile cpu hotspots --sort selfMs --limit 20
-agent-cdp profile cpu hotspot --id <HOTSPOT_ID>    # drill into a specific hotspot
+agent-cdp profile cpu hotspot --id <HOTSPOT_ID>    # drill into repeated work, child time, callers, and time ranges
 ```
 
 `--interval US` sets the sampling interval in microseconds (default 100).
 Lower values give finer resolution but more overhead.
+
+Use `--sort totalMs` or `--min-total-ms` when you need inclusive time. Use
+`profile cpu hotspot` to see whether a function's cost came from repeated short
+runs, delegated child work, or a narrow time range in the recording.
 
 ## Common flags
 

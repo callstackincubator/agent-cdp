@@ -125,8 +125,9 @@ export async function resolveSourceMapsForCandidates(candidates: Iterable<Source
 
 function safeOriginalPosition(tracer: TraceMap, line: number, column: number): OriginalPosition | null {
   try {
-    const pos = originalPositionFor(tracer, { line: line + 1, column });
-    if (!pos.source) return null;
+    const exact = originalPositionFor(tracer, { line: line + 1, column });
+    const pos = exact.source ? exact : nearestMappedPosition(tracer, line, column);
+    if (!pos?.source) return null;
     return {
       source: pos.source,
       line: (pos.line ?? 1) - 1,
@@ -136,6 +137,15 @@ function safeOriginalPosition(tracer: TraceMap, line: number, column: number): O
   } catch {
     return null;
   }
+}
+
+function nearestMappedPosition(tracer: TraceMap, line: number, column: number) {
+  for (let candidateColumn = column + 1; candidateColumn <= column + 32; candidateColumn++) {
+    const pos = originalPositionFor(tracer, { line: line + 1, column: candidateColumn });
+    if (pos.source) return pos;
+  }
+
+  return null;
 }
 
 async function fetchSourceMappingUrl(bundleUrl: string): Promise<string | null> {
