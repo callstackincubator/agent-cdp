@@ -46,6 +46,23 @@ describe("js-memory leak signal", () => {
     expect(formatJsMemoryLeakSignal(result)).toContain("note: This result spans all stored samples");
   });
 
+  it("keeps mixed full-history windows low-confidence even with GC checkpoints", () => {
+    const result = queryLeakSignal(
+      [
+        sample("jm_1", 7),
+        sample("jm_2", 8, { collectGarbageRequested: true }),
+        sample("jm_3", 6, { collectGarbageRequested: true }),
+        sample("jm_4", 12),
+        sample("jm_5", 6.7, { collectGarbageRequested: true }),
+      ],
+      { scoped: false },
+    );
+
+    expect(result.level).toBe("none");
+    expect(result.confidence).toBe("low");
+    expect(result.qualityNotes[0]).toContain("Mixed workflows can skew the signal");
+  });
+
   it("reports too-few-samples as low-confidence evidence", () => {
     const result = queryLeakSignal([sample("jm_1", 10)], { scoped: true });
 

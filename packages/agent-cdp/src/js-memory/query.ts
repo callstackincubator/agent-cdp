@@ -283,8 +283,9 @@ export function queryLeakSignal(
   const level: JsMemoryLeakSignalResult["level"] =
     score >= 5 ? "high" : score >= 3 ? "medium" : score >= 1 ? "low" : "none";
 
+  const effectiveConfidenceScore = options.scoped ? confidenceScore : Math.min(confidenceScore, 1);
   const confidence: JsMemoryLeakSignalResult["confidence"] =
-    confidenceScore >= 4 ? "high" : confidenceScore >= 2 ? "medium" : "low";
+    effectiveConfidenceScore >= 4 ? "high" : effectiveConfidenceScore >= 2 ? "medium" : "low";
 
   if (evidence.length === 0) {
     evidence.push("No strong retained-growth pattern detected in this window.");
