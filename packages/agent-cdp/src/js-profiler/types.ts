@@ -112,6 +112,7 @@ export interface JsProfileSession {
   timeBuckets: JsTimeBucket[];
   sampleTimestampsMs: number[];
   sampleHotspotIds: (string | null)[];
+  rawNodeToFrameId: Map<number, string>;
   rawProfile: unknown;
   sourceMaps: SourceMapsInfo;
 }
@@ -205,8 +206,10 @@ export interface JsHotspotDetailResult {
     hotspotId: string;
     selfTimeMs: number;
     totalTimeMs: number;
+    delegatedTimeMs: number;
     selfPercent: number;
     totalPercent: number;
+    delegatedPercentOfTotal: number;
     selfSampleCount: number;
     totalSampleCount: number;
   };
@@ -229,10 +232,32 @@ export interface JsHotspotDetailResult {
     percent: number;
     frames: string[];
   }>;
+  occurrence: {
+    runCount: number;
+    averageRunSamples: number;
+    averageRunMs: number;
+    longestRunSamples: number;
+    longestRunMs: number;
+    firstSeenMs: number | null;
+    lastSeenMs: number | null;
+  };
+  callers: Array<{
+    functionName: string;
+    module: string;
+    sampleCount: number;
+    percent: number;
+  }>;
+  callees: Array<{
+    functionName: string;
+    module: string;
+    sampleCount: number;
+    percent: number;
+  }>;
   activeTimeBuckets: Array<{
     startMs: number;
     endMs: number;
     sampleCount: number;
+    percentOfHotspotSamples: number;
   }>;
   caveats: string[];
 }

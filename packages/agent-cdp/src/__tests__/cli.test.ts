@@ -16,7 +16,7 @@ describe("cli", () => {
     expect(usage()).toContain("memory usage leak-signal [--since SAMPLE_ID]");
     expect(usage()).toContain("memory allocation hotspots [--session ID] [--limit N] [--offset N]");
     expect(usage()).toContain("memory allocation-timeline summary [--session ID]");
-    expect(usage()).toContain("profile cpu hotspots [--session ID] [--limit N] [--offset N]");
+    expect(usage()).toContain("profile cpu hotspots [--session ID] [--limit N] [--offset N] [--sort selfMs|totalMs] [--min-self-ms N] [--min-total-ms N] [--include-runtime]");
   });
 
   it("prints the preserved top-level help text", async () => {
@@ -201,6 +201,50 @@ describe("cli", () => {
     await program.parseAsync(["memory", "usage", "leak-signal", "--since", "jm_10"], { from: "user" });
 
     expect(sendCommandMock).toHaveBeenCalledWith({ type: "js-memory-leak-signal", sinceSampleId: "jm_10" });
+
+    logSpy.mockRestore();
+  });
+
+  it("dispatches CPU hotspot filters through commander", async () => {
+    const ensureDaemonMock = vi.fn().mockResolvedValue(undefined);
+    const sendCommandMock = vi.fn(async (command: IpcCommand): Promise<IpcResponse> => {
+      if (command.type === "js-profile-hotspots") {
+        return { ok: true, data: { sessionId: "s1", total: 0, offset: 0, items: [] } };
+      }
+
+      throw new Error(`Unexpected command: ${command.type}`);
+    });
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const program = createProgram({
+      ensureDaemon: ensureDaemonMock,
+      sendCommand: sendCommandMock,
+      stopDaemon: vi.fn(),
+    });
+
+    await program.parseAsync([
+      "profile",
+      "cpu",
+      "hotspots",
+      "--session",
+      "s1",
+      "--sort",
+      "totalMs",
+      "--min-self-ms",
+      "12.5",
+      "--min-total-ms",
+      "75",
+    ], { from: "user" });
+
+    expect(sendCommandMock).toHaveBeenCalledWith({
+      type: "js-profile-hotspots",
+      sessionId: "s1",
+      limit: undefined,
+      offset: undefined,
+      sortBy: "totalMs",
+      minSelfMs: 12.5,
+      minTotalMs: 75,
+      includeRuntime: false,
+    });
 
     logSpy.mockRestore();
   });

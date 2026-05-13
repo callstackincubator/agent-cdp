@@ -383,6 +383,7 @@ class Daemon {
             offset: command.offset,
             sortBy: command.sortBy,
             minSelfMs: command.minSelfMs,
+            minTotalMs: command.minTotalMs,
             includeRuntime: command.includeRuntime,
           }),
         };

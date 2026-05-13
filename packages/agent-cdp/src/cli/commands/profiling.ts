@@ -184,7 +184,7 @@ export function registerProfilingCommands(program: Command, deps: CliDeps): void
     console.log(formatJsProfileSummary(data as Parameters<typeof formatJsProfileSummary>[0], getVerbose(command)));
   });
 
-  cpu.command("hotspots").option("--session <id>").option("--limit <n>").option("--offset <n>").option("--sort <sort>").option("--min-self-ms <ms>").option("--include-runtime").action(async (options: Record<string, string | boolean | undefined>, command) => {
+  cpu.command("hotspots").option("--session <id>").option("--limit <n>").option("--offset <n>").option("--sort <sort>").option("--min-self-ms <ms>").option("--min-total-ms <ms>").option("--include-runtime").action(async (options: Record<string, string | boolean | undefined>, command) => {
     await deps.ensureDaemon();
     const data = unwrapResponse(
       await deps.sendCommand({
@@ -194,6 +194,7 @@ export function registerProfilingCommands(program: Command, deps: CliDeps): void
         offset: parseInteger(typeof options.offset === "string" ? options.offset : undefined),
         sortBy: typeof options.sort === "string" ? options.sort : undefined,
         minSelfMs: parseFloatNumber(typeof options.minSelfMs === "string" ? options.minSelfMs : undefined),
+        minTotalMs: parseFloatNumber(typeof options.minTotalMs === "string" ? options.minTotalMs : undefined),
         includeRuntime: options.includeRuntime === true,
       }),
       "Failed to get JS profile hotspots",
