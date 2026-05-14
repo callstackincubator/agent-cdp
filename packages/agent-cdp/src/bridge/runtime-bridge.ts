@@ -15,9 +15,11 @@ interface RuntimeBindingCalledParams {
 }
 
 const SUPPORTED_RUNTIME_COMMANDS = new Set<AgentRuntimeCommand["type"]>([
+  "js-memory-sample",
   "js-profile-start",
   "js-profile-status",
   "js-profile-stop",
+  "mem-snapshot-capture",
   "network-start",
   "network-status",
   "network-stop",

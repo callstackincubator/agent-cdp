@@ -182,6 +182,8 @@ export type AgentRuntimeMeasurementCommand = Extract<
   | { type: "js-profile-start" }
   | { type: "js-profile-status" }
   | { type: "js-profile-stop" }
+  | { type: "js-memory-sample" }
+  | { type: "mem-snapshot-capture" }
   | { type: "network-start" }
   | { type: "network-status" }
   | { type: "network-stop" }
@@ -240,4 +242,27 @@ export interface TraceStopResponse {
   trackCount: number;
   entryCount: number;
   durationMs: number;
+}
+
+export interface JsMemorySampleResponse {
+  sampleId: string;
+  label?: string;
+  timestamp: number;
+  usedJSHeapSize: number;
+  totalJSHeapSize: number;
+  jsHeapSizeLimit: number;
+  source: string;
+  collectGarbageRequested: boolean;
+  caveats: string[];
+}
+
+export interface MemSnapshotCaptureResponse {
+  snapshotId: string;
+  name: string;
+  filePath: string;
+  capturedAt: number;
+  collectGarbageRequested: boolean;
+  nodeCount: number;
+  totalSelfSize: number;
+  totalRetainedSize: number;
 }

@@ -86,6 +86,101 @@ describe("AgentRuntimeClient", () => {
     });
   });
 
+  it("sends memory usage sample commands and resolves typed bridge responses", async () => {
+    const sent: string[] = [];
+    agentCdpGlobals()[AGENT_CDP_BINDING_NAME] = (payload: string) => {
+      sent.push(payload);
+    };
+    const client = new AgentRuntimeClient();
+
+    const promise = client.sampleMemoryUsage({ label: "checkout", collectGarbage: true });
+    await Promise.resolve();
+    const request = JSON.parse(sent[0] || "{}");
+    (agentCdpGlobals()[AGENT_CDP_RECEIVE_NAME] as (payload: string) => void)(
+      JSON.stringify({
+        id: request.id,
+        ok: true,
+        data: {
+          sampleId: "jm_2",
+          label: "checkout",
+          timestamp: 123,
+          usedJSHeapSize: 45,
+          totalJSHeapSize: 80,
+          jsHeapSizeLimit: 256,
+          source: "performance.memory",
+          collectGarbageRequested: true,
+          caveats: [],
+        },
+      }),
+    );
+
+    await expect(promise).resolves.toEqual({
+      sampleId: "jm_2",
+      label: "checkout",
+      timestamp: 123,
+      usedJSHeapSize: 45,
+      totalJSHeapSize: 80,
+      jsHeapSizeLimit: 256,
+      source: "performance.memory",
+      collectGarbageRequested: true,
+      caveats: [],
+    });
+    expect(request.command).toEqual({
+      type: "js-memory-sample",
+      label: "checkout",
+      collectGarbage: true,
+    });
+  });
+
+  it("sends memory snapshot capture commands and returns snapshot metadata", async () => {
+    const sent: string[] = [];
+    agentCdpGlobals()[AGENT_CDP_BINDING_NAME] = (payload: string) => {
+      sent.push(payload);
+    };
+    const client = new AgentRuntimeClient();
+
+    const promise = client.captureMemorySnapshot({
+      name: "before-checkout",
+      collectGarbage: true,
+      filePath: "/tmp/before-checkout.heapsnapshot",
+    });
+    await Promise.resolve();
+    const request = JSON.parse(sent[0] || "{}");
+    (agentCdpGlobals()[AGENT_CDP_RECEIVE_NAME] as (payload: string) => void)(
+      JSON.stringify({
+        id: request.id,
+        ok: true,
+        data: {
+          snapshotId: "hs_2",
+          name: "before-checkout",
+          filePath: "/tmp/before-checkout.heapsnapshot",
+          capturedAt: 123,
+          collectGarbageRequested: true,
+          nodeCount: 10,
+          totalSelfSize: 20,
+          totalRetainedSize: 30,
+        },
+      }),
+    );
+
+    await expect(promise).resolves.toEqual({
+      snapshotId: "hs_2",
+      name: "before-checkout",
+      filePath: "/tmp/before-checkout.heapsnapshot",
+      capturedAt: 123,
+      collectGarbageRequested: true,
+      nodeCount: 10,
+      totalSelfSize: 20,
+      totalRetainedSize: 30,
+    });
+    expect(request.command).toEqual({
+      type: "mem-snapshot-capture",
+      name: "before-checkout",
+      collectGarbage: true,
+      filePath: "/tmp/before-checkout.heapsnapshot",
+    });
+  });
+
   it("requests network status through the runtime bridge", async () => {
     const sent: string[] = [];
     agentCdpGlobals()[AGENT_CDP_BINDING_NAME] = (payload: string) => {

@@ -3,7 +3,9 @@ import {
   AGENT_CDP_RECEIVE_NAME,
   type AgentRuntimeBridgeResponse,
   type AgentRuntimeCommand,
+  type JsMemorySampleResponse,
   type JsProfileStatusResponse,
+  type MemSnapshotCaptureResponse,
   type NetworkStartResponse,
   type NetworkStatusResponse,
   type NetworkStopResponse,
@@ -68,6 +70,25 @@ export class AgentRuntimeClient {
 
   stopCpuProfile(): Promise<string> {
     return this.send({ type: "js-profile-stop" }) as Promise<string>;
+  }
+
+  sampleMemoryUsage(options: { label?: string; collectGarbage?: boolean } = {}): Promise<JsMemorySampleResponse> {
+    return this.send({
+      type: "js-memory-sample",
+      label: options.label,
+      collectGarbage: options.collectGarbage,
+    }) as Promise<JsMemorySampleResponse>;
+  }
+
+  captureMemorySnapshot(
+    options: { name?: string; collectGarbage?: boolean; filePath?: string } = {},
+  ): Promise<MemSnapshotCaptureResponse> {
+    return this.send({
+      type: "mem-snapshot-capture",
+      name: options.name,
+      collectGarbage: options.collectGarbage,
+      filePath: options.filePath,
+    }) as Promise<MemSnapshotCaptureResponse>;
   }
 
   startNetwork(options: { name?: string; preserveAcrossNavigation?: boolean } = {}): Promise<NetworkStartResponse> {
@@ -164,6 +185,15 @@ export const cpuProfile = {
   stop: () => defaultClient.stopCpuProfile(),
 };
 
+export const memoryUsage = {
+  sample: (options?: { label?: string; collectGarbage?: boolean }) => defaultClient.sampleMemoryUsage(options),
+};
+
+export const memorySnapshot = {
+  capture: (options?: { name?: string; collectGarbage?: boolean; filePath?: string }) =>
+    defaultClient.captureMemorySnapshot(options),
+};
+
 export const trace = {
   start: () => defaultClient.startTrace(),
   status: () => defaultClient.getTraceStatus(),
@@ -177,7 +207,9 @@ export const network = {
 };
 
 export type {
+  JsMemorySampleResponse,
   JsProfileStatusResponse,
+  MemSnapshotCaptureResponse,
   NetworkStartResponse,
   NetworkStatusResponse,
   NetworkStopResponse,

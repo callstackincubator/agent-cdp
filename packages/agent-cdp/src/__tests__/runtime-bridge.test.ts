@@ -149,6 +149,99 @@ describe("AgentRuntimeBridge", () => {
     expect(String(transport.sent[2]?.params?.expression)).toContain('\\"id\\":\\"net_1\\"');
   });
 
+  it("routes memory measurement commands through the dispatcher", async () => {
+    const dispatched: unknown[] = [];
+    const dispatcher = {
+      dispatch: async (command: unknown) => {
+        dispatched.push(command);
+        return {
+          ok: true,
+          data: {
+            sampleId: "jm_1",
+            label: "checkout",
+            timestamp: 100,
+            usedJSHeapSize: 25,
+            totalJSHeapSize: 40,
+            jsHeapSizeLimit: 256,
+            source: "performance.memory",
+            collectGarbageRequested: true,
+            caveats: [],
+          },
+        };
+      },
+    } as AgentCdpCommandDispatcher;
+    const transport = new FakeBridgeTransport();
+    const bridge = new AgentRuntimeBridge(dispatcher);
+
+    await bridge.attach(createSession(transport));
+    transport.emit({
+      method: "Runtime.bindingCalled",
+      params: {
+        name: AGENT_CDP_BINDING_NAME,
+        payload: JSON.stringify({
+          id: "1",
+          command: { type: "js-memory-sample", label: "checkout", collectGarbage: true },
+        }),
+      },
+    });
+    await Promise.resolve();
+
+    expect(dispatched).toEqual([{ type: "js-memory-sample", label: "checkout", collectGarbage: true }]);
+    expect(String(transport.sent[2]?.params?.expression)).toContain('\\"sampleId\\":\\"jm_1\\"');
+  });
+
+  it("routes memory snapshot capture commands through the dispatcher", async () => {
+    const dispatched: unknown[] = [];
+    const dispatcher = {
+      dispatch: async (command: unknown) => {
+        dispatched.push(command);
+        return {
+          ok: true,
+          data: {
+            snapshotId: "hs_1",
+            name: "before-checkout",
+            filePath: "/tmp/before-checkout.heapsnapshot",
+            capturedAt: 200,
+            collectGarbageRequested: true,
+            nodeCount: 10,
+            totalSelfSize: 20,
+            totalRetainedSize: 30,
+          },
+        };
+      },
+    } as AgentCdpCommandDispatcher;
+    const transport = new FakeBridgeTransport();
+    const bridge = new AgentRuntimeBridge(dispatcher);
+
+    await bridge.attach(createSession(transport));
+    transport.emit({
+      method: "Runtime.bindingCalled",
+      params: {
+        name: AGENT_CDP_BINDING_NAME,
+        payload: JSON.stringify({
+          id: "1",
+          command: {
+            type: "mem-snapshot-capture",
+            name: "before-checkout",
+            collectGarbage: true,
+            filePath: "/tmp/before-checkout.heapsnapshot",
+          },
+        }),
+      },
+    });
+    await Promise.resolve();
+
+    expect(dispatched).toEqual([
+      {
+        type: "mem-snapshot-capture",
+        name: "before-checkout",
+        collectGarbage: true,
+        filePath: "/tmp/before-checkout.heapsnapshot",
+      },
+    ]);
+    expect(String(transport.sent[2]?.params?.expression)).toContain('\\"snapshotId\\":\\"hs_1\\"');
+  });
+
   it("reinstalls the runtime binding after execution context resets", async () => {
     const dispatcher = {
       dispatch: vi.fn(),
