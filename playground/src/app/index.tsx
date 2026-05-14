@@ -1,3 +1,5 @@
+import { cpuProfile, type JsProfileStatusResponse } from '@agent-cdp/sdk';
+import { useState } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -120,6 +122,17 @@ function measureTrace(name: string, startMark: string, endMark: string) {
   }
 }
 
+function runSdkCpuWorkload() {
+  const seeds = [101, 211, 307, 401];
+  const summaries = seeds.map((seed) => runCpuHotspot(seed));
+
+  return {
+    iterations: summaries.length,
+    checksum: summaries.reduce((total, summary) => total + summary.checksum + summary.peak, 0),
+    peak: summaries.reduce((peak, summary) => Math.max(peak, summary.peak), 0),
+  };
+}
+
 async function fetchJson(url: string) {
   const response = await fetch(url);
   const text = await response.text();
@@ -135,20 +148,24 @@ function ScenarioButton({
   label,
   onPress,
   variant = 'default',
+  disabled = false,
 }: {
   label: string;
   onPress: () => void;
   variant?: 'default' | 'danger';
+  disabled?: boolean;
 }) {
   return (
     <Pressable
       accessibilityLabel={label}
       accessibilityRole="button"
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
         variant === 'danger' ? styles.buttonDanger : styles.buttonDefault,
-        pressed && styles.buttonPressed,
+        pressed && !disabled && styles.buttonPressed,
+        disabled && styles.buttonDisabled,
       ]}
       testID={label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}>
       <ThemedText type="smallBold" style={styles.buttonLabel}>
@@ -159,6 +176,20 @@ function ScenarioButton({
 }
 
 export default function HomeScreen() {
+  const [sdkFlowPending, setSdkFlowPending] = useState(false);
+  const [sdkFlowMessage, setSdkFlowMessage] = useState('Select the app target with agent-cdp, then run the SDK CPU profile flow.');
+  const [sdkFlowError, setSdkFlowError] = useState<string | null>(null);
+  const [sdkStatus, setSdkStatus] = useState<JsProfileStatusResponse | null>(null);
+  const [lastSdkProfileSessionId, setLastSdkProfileSessionId] = useState<string | null>(null);
+
+  async function refreshSdkCpuProfileStatus() {
+    const status = await cpuProfile.status();
+    setSdkStatus(status);
+    setSdkFlowError(null);
+    setSdkFlowMessage('SDK CPU profile status refreshed.');
+    return status;
+  }
+
   function retainSmallBatch() {
     const batch = createRetainedBatch('small', 250);
     getStore().batches.push(batch);
@@ -224,6 +255,69 @@ export default function HomeScreen() {
     logState('async-burst');
   }
 
+  async function runSdkCpuProfileFlow() {
+    setSdkFlowPending(true);
+    setLastSdkProfileSessionId(null);
+    setSdkFlowError(null);
+    setSdkFlowMessage('Checking current SDK CPU profile status...');
+
+    try {
+      const initialStatus = await cpuProfile.status();
+      setSdkStatus(initialStatus);
+
+      if (initialStatus.active) {
+        const previousSessionId = await cpuProfile.stop();
+        console.warn('[playground] stopped existing SDK CPU profile before test flow', {
+          previousSessionId,
+          initialStatus,
+        });
+      }
+
+      setSdkFlowMessage('Starting SDK CPU profile...');
+      const startResult = await cpuProfile.start({ name: `playground-sdk-${Date.now()}` });
+      const activeStatus = await cpuProfile.status();
+      setSdkStatus(activeStatus);
+
+      setSdkFlowMessage('Running deterministic JS workload...');
+      const startMark = `sdk-cpu-profile-start-${Date.now()}`;
+      markTrace(startMark);
+      const workload = runSdkCpuWorkload();
+      const endMark = `sdk-cpu-profile-end-${Date.now()}`;
+      markTrace(endMark);
+      measureTrace('playground:sdk-cpu-profile-flow', startMark, endMark);
+
+      setSdkFlowMessage('Stopping SDK CPU profile...');
+      const sessionId = await cpuProfile.stop();
+      const finalStatus = await cpuProfile.status();
+      setSdkStatus(finalStatus);
+
+      setLastSdkProfileSessionId(sessionId);
+      setSdkFlowMessage(`Profile captured. Session ID: ${sessionId}`);
+      console.log('[playground] SDK CPU profile flow complete', {
+        startResult,
+        activeStatus,
+        workload,
+        sessionId,
+        finalStatus,
+      });
+      logState('sdk-cpu-profile-flow');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setSdkFlowError(message);
+      setSdkFlowMessage(`SDK CPU profile flow failed: ${message}`);
+      console.error('[playground] SDK CPU profile flow failed', error);
+
+      try {
+        const status = await cpuProfile.status();
+        setSdkStatus(status);
+      } catch {
+        // Preserve the original failure when status refresh is unavailable.
+      }
+    } finally {
+      setSdkFlowPending(false);
+    }
+  }
+
   async function runNetworkBurst() {
     const startMark = `network-burst-start-${Date.now()}`;
     markTrace(startMark);
@@ -261,9 +355,41 @@ export default function HomeScreen() {
           <ScenarioButton label="Emit console burst" onPress={emitConsoleBurst} />
           <ScenarioButton label="Run CPU hotspot" onPress={runProfileHotspot} />
           <ScenarioButton label="Run async burst" onPress={runAsyncProfileBurst} />
+          <ScenarioButton
+            disabled={sdkFlowPending}
+            label={sdkFlowPending ? 'Running SDK CPU profile flow...' : 'Run SDK CPU profile flow'}
+            onPress={() => {
+              void runSdkCpuProfileFlow();
+            }}
+          />
+          <ScenarioButton
+            disabled={sdkFlowPending}
+            label="Refresh SDK profile status"
+            onPress={() => {
+              void refreshSdkCpuProfileStatus();
+            }}
+          />
           <ScenarioButton label="Run network burst" onPress={runNetworkBurst} />
           <ScenarioButton label="Log inspection payload" onPress={logSamplePayload} />
           <ScenarioButton label="Clear retained batches" onPress={clearRetainedBatches} variant="danger" />
+        </ThemedView>
+        <ThemedView style={styles.statusCard} type="backgroundElement">
+          <ThemedText type="smallBold">SDK CPU Profile E2E</ThemedText>
+          <ThemedText style={styles.statusHelp} themeColor="textSecondary" type="small">
+            Use this after selecting the Expo target with the daemon. The flow starts profiling, runs a deterministic JS workload, then stops and reports the session.
+          </ThemedText>
+          <ThemedText type="small">Active: {sdkStatus ? (sdkStatus.active ? 'yes' : 'no') : 'unknown'}</ThemedText>
+          <ThemedText type="small">Sessions recorded: {sdkStatus?.sessionCount ?? 'unknown'}</ThemedText>
+          <ThemedText type="small">Elapsed ms: {sdkStatus?.elapsedMs ?? 'unknown'}</ThemedText>
+          <ThemedText type="small">Active name: {sdkStatus?.activeName ?? 'none'}</ThemedText>
+          <ThemedText style={sdkFlowError ? styles.statusError : styles.statusMessage} type="small">
+            {sdkFlowMessage}
+          </ThemedText>
+          {lastSdkProfileSessionId ? (
+            <ThemedText selectable style={styles.sessionId} type="code">
+              Last session ID: {lastSdkProfileSessionId}
+            </ThemedText>
+          ) : null}
         </ThemedView>
       </SafeAreaView>
     </ThemedView>
@@ -288,6 +414,14 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth,
     gap: Spacing.three,
   },
+  statusCard: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    marginTop: Spacing.three,
+    borderRadius: Spacing.three,
+    padding: Spacing.three,
+    gap: Spacing.one,
+  },
   button: {
     borderRadius: Spacing.three,
     paddingHorizontal: Spacing.three,
@@ -305,8 +439,24 @@ const styles = StyleSheet.create({
   buttonPressed: {
     opacity: 0.75,
   },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
   buttonLabel: {
     fontSize: 14,
     textAlign: 'center',
+  },
+  statusHelp: {
+    marginBottom: Spacing.one,
+  },
+  statusMessage: {
+    marginTop: Spacing.one,
+  },
+  statusError: {
+    marginTop: Spacing.one,
+    color: '#d95c5c',
+  },
+  sessionId: {
+    marginTop: Spacing.one,
   },
 });

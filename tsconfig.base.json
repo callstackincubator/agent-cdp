@@ -10,6 +10,11 @@
     "declaration": true,
     "sourceMap": true,
     "resolveJsonModule": true,
-    "types": ["node"]
-  }
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@agent-cdp/protocol": ["packages/protocol/src/index.ts"],
+      "@agent-cdp/sdk": ["packages/sdk/src/index.ts"],
+    },
+  },
 }
