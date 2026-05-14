@@ -4,6 +4,8 @@ import {
   type AgentRuntimeBridgeResponse,
   type AgentRuntimeCommand,
   type JsProfileStatusResponse,
+  type TraceStatusResponse,
+  type TraceStopResponse,
 } from "@agent-cdp/protocol";
 
 declare global {
@@ -14,6 +16,14 @@ declare global {
 function agentCdpGlobals(): Record<string, unknown> {
   return globalThis as Record<string, unknown>;
 }
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+const BINDING_POLL_INTERVAL_MS = 25;
 
 export interface AgentRuntimeClientOptions {
   timeoutMs?: number;
@@ -57,11 +67,20 @@ export class AgentRuntimeClient {
     return this.send({ type: "js-profile-stop" }) as Promise<string>;
   }
 
-  private send(command: AgentRuntimeCommand): Promise<unknown> {
-    const binding = agentCdpGlobals()[this.bindingName];
-    if (typeof binding !== "function") {
-      return Promise.reject(new Error("agent-cdp runtime bridge is not installed. Select a target with the daemon first."));
-    }
+  startTrace(): Promise<string> {
+    return this.send({ type: "start-trace" }) as Promise<string>;
+  }
+
+  getTraceStatus(): Promise<TraceStatusResponse> {
+    return this.send({ type: "trace-status" }) as Promise<TraceStatusResponse>;
+  }
+
+  stopTrace(): Promise<TraceStopResponse> {
+    return this.send({ type: "stop-trace" }) as Promise<TraceStopResponse>;
+  }
+
+  private async send(command: AgentRuntimeCommand): Promise<unknown> {
+    const binding = await this.waitForBinding();
 
     const id = String(this.nextId++);
     return new Promise((resolve, reject) => {
@@ -72,6 +91,21 @@ export class AgentRuntimeClient {
       this.pending.set(id, { timeout, resolve, reject });
       binding(JSON.stringify({ id, command }));
     });
+  }
+
+  private async waitForBinding(): Promise<(payload: string) => void> {
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt <= this.timeoutMs) {
+      const binding = agentCdpGlobals()[this.bindingName];
+      if (typeof binding === "function") {
+        return binding as (payload: string) => void;
+      }
+
+      await sleep(BINDING_POLL_INTERVAL_MS);
+    }
+
+    throw new Error("agent-cdp runtime bridge is not installed. Select a target with the daemon first.");
   }
 
   private installReceiver(): void {
@@ -111,4 +145,10 @@ export const cpuProfile = {
   stop: () => defaultClient.stopCpuProfile(),
 };
 
-export type { JsProfileStatusResponse } from "@agent-cdp/protocol";
+export const trace = {
+  start: () => defaultClient.startTrace(),
+  status: () => defaultClient.getTraceStatus(),
+  stop: () => defaultClient.stopTrace(),
+};
+
+export type { JsProfileStatusResponse, TraceStatusResponse, TraceStopResponse } from "@agent-cdp/protocol";

@@ -1,6 +1,7 @@
 import {
   AGENT_CDP_BINDING_NAME,
   AGENT_CDP_RECEIVE_NAME,
+  type AgentRuntimeCommand,
   type AgentRuntimeBridgeRequest,
   type AgentRuntimeBridgeResponse,
 } from "@agent-cdp/protocol";
@@ -12,6 +13,15 @@ interface RuntimeBindingCalledParams {
   name?: string;
   payload?: string;
 }
+
+const SUPPORTED_RUNTIME_COMMANDS = new Set<AgentRuntimeCommand["type"]>([
+  "js-profile-start",
+  "js-profile-status",
+  "js-profile-stop",
+  "start-trace",
+  "trace-status",
+  "stop-trace",
+]);
 
 export class AgentRuntimeBridge {
   private session: RuntimeSession | null = null;
@@ -27,8 +37,12 @@ export class AgentRuntimeBridge {
     this.detach();
     this.session = session;
     await session.transport.send("Runtime.enable");
-    await session.transport.send("Runtime.addBinding", { name: AGENT_CDP_BINDING_NAME });
+    await this.installBinding(session);
     this.removeEventListener = session.transport.onEvent((message) => {
+      if (message.method === "Runtime.executionContextsCleared" || message.method === "Runtime.executionContextCreated") {
+        void this.reinstallBinding(session);
+        return;
+      }
       if (message.method !== "Runtime.bindingCalled") {
         return;
       }
@@ -76,7 +90,23 @@ export class AgentRuntimeBridge {
       return false;
     }
 
-    return ["js-profile-start", "js-profile-status", "js-profile-stop"].includes(String(command.type));
+    return SUPPORTED_RUNTIME_COMMANDS.has(String(command.type) as AgentRuntimeCommand["type"]);
+  }
+
+  private async installBinding(session: RuntimeSession): Promise<void> {
+    await session.transport.send("Runtime.addBinding", { name: AGENT_CDP_BINDING_NAME });
+  }
+
+  private async reinstallBinding(session: RuntimeSession): Promise<void> {
+    if (this.session !== session || !session.transport.isConnected()) {
+      return;
+    }
+
+    try {
+      await this.installBinding(session);
+    } catch {
+      // Runtime replacement can race with transport reconnect; a later reconnect attach will retry.
+    }
   }
 
   private async sendResponse(session: RuntimeSession, response: AgentRuntimeBridgeResponse): Promise<void> {

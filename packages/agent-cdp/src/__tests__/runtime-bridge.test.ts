@@ -1,4 +1,5 @@
 import { AGENT_CDP_BINDING_NAME, AGENT_CDP_RECEIVE_NAME } from "@agent-cdp/protocol";
+import { vi } from "vitest";
 
 import { AgentRuntimeBridge } from "../bridge/runtime-bridge.js";
 import type { AgentCdpCommandDispatcher } from "../command-dispatcher.js";
@@ -82,6 +83,45 @@ describe("AgentRuntimeBridge", () => {
     expect(transport.sent[2]?.method).toBe("Runtime.evaluate");
     expect(String(transport.sent[2]?.params?.expression)).toContain(AGENT_CDP_RECEIVE_NAME);
     expect(String(transport.sent[2]?.params?.expression)).toContain("profile-1");
+  });
+
+  it("routes trace measurement commands through the dispatcher", async () => {
+    const dispatched: unknown[] = [];
+    const dispatcher = {
+      dispatch: async (command: unknown) => {
+        dispatched.push(command);
+        return { ok: true, data: { active: true, elapsedMs: 12, sessionCount: 0 } };
+      },
+    } as AgentCdpCommandDispatcher;
+    const transport = new FakeBridgeTransport();
+    const bridge = new AgentRuntimeBridge(dispatcher);
+
+    await bridge.attach(createSession(transport));
+    transport.emit({
+      method: "Runtime.bindingCalled",
+      params: {
+        name: AGENT_CDP_BINDING_NAME,
+        payload: JSON.stringify({ id: "1", command: { type: "trace-status" } }),
+      },
+    });
+    await Promise.resolve();
+
+    expect(dispatched).toEqual([{ type: "trace-status" }]);
+    expect(String(transport.sent[2]?.params?.expression)).toContain('\\"active\\":true');
+  });
+
+  it("reinstalls the runtime binding after execution context resets", async () => {
+    const dispatcher = {
+      dispatch: vi.fn(),
+    } as unknown as AgentCdpCommandDispatcher;
+    const transport = new FakeBridgeTransport();
+    const bridge = new AgentRuntimeBridge(dispatcher);
+
+    await bridge.attach(createSession(transport));
+    transport.emit({ method: "Runtime.executionContextsCleared", params: {} });
+    await Promise.resolve();
+
+    expect(transport.sent[2]).toEqual({ method: "Runtime.addBinding", params: { name: AGENT_CDP_BINDING_NAME } });
   });
 
   it("rejects unsupported bridge commands without dispatching", async () => {

@@ -177,12 +177,17 @@ export type IpcResponse =
   | { ok: true; data: unknown }
   | { ok: false; error: string; data?: unknown };
 
-export type AgentRuntimeCommand = Extract<
+export type AgentRuntimeMeasurementCommand = Extract<
   IpcCommand,
   | { type: "js-profile-start" }
   | { type: "js-profile-status" }
   | { type: "js-profile-stop" }
+  | { type: "start-trace" }
+  | { type: "trace-status" }
+  | { type: "stop-trace" }
 >;
+
+export type AgentRuntimeCommand = AgentRuntimeMeasurementCommand;
 
 export interface AgentRuntimeBridgeRequest {
   id: string;
@@ -200,4 +205,20 @@ export interface JsProfileStatusResponse {
   activeName?: string;
   elapsedMs: number;
   sessionCount: number;
+}
+
+export type TraceStartResponse = string;
+export interface TraceStatusResponse {
+  active: boolean;
+  elapsedMs: number | null;
+  sessionCount: number;
+}
+
+export interface TraceStopResponse {
+  sessionId: string;
+  eventCount: number;
+  filePath?: string;
+  trackCount: number;
+  entryCount: number;
+  durationMs: number;
 }

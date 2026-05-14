@@ -22,6 +22,7 @@ describe("AgentRuntimeClient", () => {
     const client = new AgentRuntimeClient();
 
     const promise = client.stopCpuProfile();
+    await Promise.resolve();
     const request = JSON.parse(sent[0] || "{}");
     (agentCdpGlobals()[AGENT_CDP_RECEIVE_NAME] as (payload: string) => void)(
       JSON.stringify({ id: request.id, ok: true, data: "profile-1" }),
@@ -31,10 +32,63 @@ describe("AgentRuntimeClient", () => {
     expect(request.command).toEqual({ type: "js-profile-stop" });
   });
 
-  it("rejects when the runtime bridge is unavailable", async () => {
+  it("sends trace commands and resolves typed bridge responses", async () => {
+    const sent: string[] = [];
+    agentCdpGlobals()[AGENT_CDP_BINDING_NAME] = (payload: string) => {
+      sent.push(payload);
+    };
     const client = new AgentRuntimeClient();
 
-    await expect(client.getCpuProfileStatus()).rejects.toThrow("runtime bridge is not installed");
+    const promise = client.stopTrace();
+    await Promise.resolve();
+    const request = JSON.parse(sent[0] || "{}");
+    (agentCdpGlobals()[AGENT_CDP_RECEIVE_NAME] as (payload: string) => void)(
+      JSON.stringify({
+        id: request.id,
+        ok: true,
+        data: { sessionId: "trace-1", eventCount: 3, trackCount: 1, entryCount: 2, durationMs: 25 },
+      }),
+    );
+
+    await expect(promise).resolves.toEqual({
+      sessionId: "trace-1",
+      eventCount: 3,
+      trackCount: 1,
+      entryCount: 2,
+      durationMs: 25,
+    });
+    expect(request.command).toEqual({ type: "stop-trace" });
+  });
+
+  it("rejects when the runtime bridge is unavailable", async () => {
+    vi.useFakeTimers();
+    const client = new AgentRuntimeClient();
+    const promise = client.getCpuProfileStatus();
+    const assertion = expect(promise).rejects.toThrow("runtime bridge is not installed");
+    await vi.advanceTimersByTimeAsync(10_025);
+
+    await assertion;
+  });
+
+  it("waits for the runtime bridge to reappear before sending", async () => {
+    vi.useFakeTimers();
+    const sent: string[] = [];
+    const client = new AgentRuntimeClient({ timeoutMs: 100 });
+
+    const promise = client.getTraceStatus();
+    await vi.advanceTimersByTimeAsync(50);
+    agentCdpGlobals()[AGENT_CDP_BINDING_NAME] = (payload: string) => {
+      sent.push(payload);
+    };
+    await vi.advanceTimersByTimeAsync(25);
+
+    const request = JSON.parse(sent[0] || "{}");
+    (agentCdpGlobals()[AGENT_CDP_RECEIVE_NAME] as (payload: string) => void)(
+      JSON.stringify({ id: request.id, ok: true, data: { active: true, elapsedMs: 50, sessionCount: 1 } }),
+    );
+
+    await expect(promise).resolves.toEqual({ active: true, elapsedMs: 50, sessionCount: 1 });
+    expect(request.command).toEqual({ type: "trace-status" });
   });
 
   it("rejects timed out requests", async () => {
@@ -43,8 +97,9 @@ describe("AgentRuntimeClient", () => {
     const client = new AgentRuntimeClient({ timeoutMs: 5 });
 
     const promise = client.getCpuProfileStatus();
-    vi.advanceTimersByTime(5);
+    const assertion = expect(promise).rejects.toThrow("timed out");
+    await vi.advanceTimersByTimeAsync(5);
 
-    await expect(promise).rejects.toThrow("timed out");
+    await assertion;
   });
 });
