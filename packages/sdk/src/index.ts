@@ -1,8 +1,15 @@
 import {
   AGENT_CDP_BINDING_NAME,
   AGENT_CDP_RECEIVE_NAME,
+  type AgentRuntimeBridgeRequest,
   type AgentRuntimeBridgeResponse,
   type AgentRuntimeCommand,
+  type JsAllocationStartResponse,
+  type JsAllocationStatusResponse,
+  type JsAllocationStopResponse,
+  type JsAllocationTimelineStartResponse,
+  type JsAllocationTimelineStatusResponse,
+  type JsAllocationTimelineStopResponse,
   type JsMemorySampleResponse,
   type JsProfileStatusResponse,
   type MemSnapshotCaptureResponse,
@@ -70,6 +77,48 @@ export class AgentRuntimeClient {
 
   stopCpuProfile(): Promise<string> {
     return this.send({ type: "js-profile-stop" }) as Promise<string>;
+  }
+
+  startAllocation(
+    options: {
+      name?: string;
+      samplingIntervalBytes?: number;
+      stackDepth?: number;
+      includeObjectsCollectedByMajorGC?: boolean;
+      includeObjectsCollectedByMinorGC?: boolean;
+    } = {},
+  ): Promise<JsAllocationStartResponse> {
+    return this.send({
+      type: "js-allocation-start",
+      name: options.name,
+      samplingIntervalBytes: options.samplingIntervalBytes,
+      stackDepth: options.stackDepth,
+      includeObjectsCollectedByMajorGC: options.includeObjectsCollectedByMajorGC,
+      includeObjectsCollectedByMinorGC: options.includeObjectsCollectedByMinorGC,
+    }) as Promise<JsAllocationStartResponse>;
+  }
+
+  getAllocationStatus(): Promise<JsAllocationStatusResponse> {
+    return this.send({ type: "js-allocation-status" }) as Promise<JsAllocationStatusResponse>;
+  }
+
+  stopAllocation(): Promise<JsAllocationStopResponse> {
+    return this.send({ type: "js-allocation-stop" }) as Promise<JsAllocationStopResponse>;
+  }
+
+  startAllocationTimeline(options: { name?: string } = {}): Promise<JsAllocationTimelineStartResponse> {
+    return this.send({
+      type: "js-allocation-timeline-start",
+      name: options.name,
+    }) as Promise<JsAllocationTimelineStartResponse>;
+  }
+
+  getAllocationTimelineStatus(): Promise<JsAllocationTimelineStatusResponse> {
+    return this.send({ type: "js-allocation-timeline-status" }) as Promise<JsAllocationTimelineStatusResponse>;
+  }
+
+  stopAllocationTimeline(): Promise<JsAllocationTimelineStopResponse> {
+    return this.send({ type: "js-allocation-timeline-stop" }) as Promise<JsAllocationTimelineStopResponse>;
   }
 
   sampleMemoryUsage(options: { label?: string; collectGarbage?: boolean } = {}): Promise<JsMemorySampleResponse> {
@@ -185,6 +234,24 @@ export const cpuProfile = {
   stop: () => defaultClient.stopCpuProfile(),
 };
 
+export const allocation = {
+  start: (options?: {
+    name?: string;
+    samplingIntervalBytes?: number;
+    stackDepth?: number;
+    includeObjectsCollectedByMajorGC?: boolean;
+    includeObjectsCollectedByMinorGC?: boolean;
+  }) => defaultClient.startAllocation(options),
+  status: () => defaultClient.getAllocationStatus(),
+  stop: () => defaultClient.stopAllocation(),
+};
+
+export const allocationTimeline = {
+  start: (options?: { name?: string }) => defaultClient.startAllocationTimeline(options),
+  status: () => defaultClient.getAllocationTimelineStatus(),
+  stop: () => defaultClient.stopAllocationTimeline(),
+};
+
 export const memoryUsage = {
   sample: (options?: { label?: string; collectGarbage?: boolean }) => defaultClient.sampleMemoryUsage(options),
 };
@@ -207,6 +274,13 @@ export const network = {
 };
 
 export type {
+  AgentRuntimeBridgeRequest,
+  JsAllocationStartResponse,
+  JsAllocationStatusResponse,
+  JsAllocationStopResponse,
+  JsAllocationTimelineStartResponse,
+  JsAllocationTimelineStatusResponse,
+  JsAllocationTimelineStopResponse,
   JsMemorySampleResponse,
   JsProfileStatusResponse,
   MemSnapshotCaptureResponse,

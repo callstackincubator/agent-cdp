@@ -60,6 +60,121 @@ describe("AgentRuntimeClient", () => {
     expect(request.command).toEqual({ type: "stop-trace" });
   });
 
+  it("sends allocation measurement commands and preserves stop results", async () => {
+    const sent: string[] = [];
+    agentCdpGlobals()[AGENT_CDP_BINDING_NAME] = (payload: string) => {
+      sent.push(payload);
+    };
+    const client = new AgentRuntimeClient();
+
+    const startPromise = client.startAllocation({
+      name: "checkout",
+      samplingIntervalBytes: 32_768,
+      stackDepth: 16,
+      includeObjectsCollectedByMajorGC: true,
+      includeObjectsCollectedByMinorGC: false,
+    });
+    await Promise.resolve();
+    const startRequest = JSON.parse(sent[0] || "{}");
+    (agentCdpGlobals()[AGENT_CDP_RECEIVE_NAME] as (payload: string) => void)(
+      JSON.stringify({ id: startRequest.id, ok: true, data: null }),
+    );
+    await expect(startPromise).resolves.toBeNull();
+    expect(startRequest.command).toEqual({
+      type: "js-allocation-start",
+      name: "checkout",
+      samplingIntervalBytes: 32_768,
+      stackDepth: 16,
+      includeObjectsCollectedByMajorGC: true,
+      includeObjectsCollectedByMinorGC: false,
+    });
+
+    const statusPromise = client.getAllocationStatus();
+    await Promise.resolve();
+    const statusRequest = JSON.parse(sent[1] || "{}");
+    (agentCdpGlobals()[AGENT_CDP_RECEIVE_NAME] as (payload: string) => void)(
+      JSON.stringify({
+        id: statusRequest.id,
+        ok: true,
+        data: { active: true, activeName: "checkout", elapsedMs: 250, sessionCount: 1 },
+      }),
+    );
+    await expect(statusPromise).resolves.toEqual({ active: true, activeName: "checkout", elapsedMs: 250, sessionCount: 1 });
+    expect(statusRequest.command).toEqual({ type: "js-allocation-status" });
+
+    const stopPromise = client.stopAllocation();
+    await Promise.resolve();
+    const stopRequest = JSON.parse(sent[2] || "{}");
+    (agentCdpGlobals()[AGENT_CDP_RECEIVE_NAME] as (payload: string) => void)(
+      JSON.stringify({ id: stopRequest.id, ok: true, data: "ja_2" }),
+    );
+    await expect(stopPromise).resolves.toBe("ja_2");
+    expect(stopRequest.command).toEqual({ type: "js-allocation-stop" });
+  });
+
+  it("exposes allocation timeline commands through the public SDK namespace", async () => {
+    vi.resetModules();
+    const sent: string[] = [];
+    agentCdpGlobals()[AGENT_CDP_BINDING_NAME] = (payload: string) => {
+      sent.push(payload);
+    };
+    const { allocationTimeline } = await import("./index.js");
+
+    const startPromise = allocationTimeline.start({ name: "feed" });
+    await Promise.resolve();
+    const startRequest = JSON.parse(sent[0] || "{}");
+    (agentCdpGlobals()[AGENT_CDP_RECEIVE_NAME] as (payload: string) => void)(
+      JSON.stringify({ id: startRequest.id, ok: true, data: null }),
+    );
+    await expect(startPromise).resolves.toBeNull();
+    expect(startRequest.command).toEqual({ type: "js-allocation-timeline-start", name: "feed" });
+
+    const statusPromise = allocationTimeline.status();
+    await Promise.resolve();
+    const statusRequest = JSON.parse(sent[1] || "{}");
+    (agentCdpGlobals()[AGENT_CDP_RECEIVE_NAME] as (payload: string) => void)(
+      JSON.stringify({
+        id: statusRequest.id,
+        ok: true,
+        data: { active: true, activeName: "feed", elapsedMs: 400, sessionCount: 2 },
+      }),
+    );
+    await expect(statusPromise).resolves.toEqual({ active: true, activeName: "feed", elapsedMs: 400, sessionCount: 2 });
+    expect(statusRequest.command).toEqual({ type: "js-allocation-timeline-status" });
+
+    const stopPromise = allocationTimeline.stop();
+    await Promise.resolve();
+    const stopRequest = JSON.parse(sent[2] || "{}");
+    (agentCdpGlobals()[AGENT_CDP_RECEIVE_NAME] as (payload: string) => void)(
+      JSON.stringify({ id: stopRequest.id, ok: true, data: "jat_3" }),
+    );
+    await expect(stopPromise).resolves.toBe("jat_3");
+    expect(stopRequest.command).toEqual({ type: "js-allocation-timeline-stop" });
+  });
+
+  it("exposes allocation commands through the public SDK namespace", async () => {
+    vi.resetModules();
+    const sent: string[] = [];
+    agentCdpGlobals()[AGENT_CDP_BINDING_NAME] = (payload: string) => {
+      sent.push(payload);
+    };
+    const { allocation } = await import("./index.js");
+
+    const promise = allocation.status();
+    await Promise.resolve();
+    const request = JSON.parse(sent[0] || "{}");
+    (agentCdpGlobals()[AGENT_CDP_RECEIVE_NAME] as (payload: string) => void)(
+      JSON.stringify({
+        id: request.id,
+        ok: true,
+        data: { active: false, activeName: null, elapsedMs: null, sessionCount: 0 },
+      }),
+    );
+
+    await expect(promise).resolves.toEqual({ active: false, activeName: null, elapsedMs: null, sessionCount: 0 });
+    expect(request.command).toEqual({ type: "js-allocation-status" });
+  });
+
   it("sends network measurement commands and resolves typed bridge responses", async () => {
     const sent: string[] = [];
     agentCdpGlobals()[AGENT_CDP_BINDING_NAME] = (payload: string) => {

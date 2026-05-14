@@ -15,6 +15,12 @@ interface RuntimeBindingCalledParams {
 }
 
 const SUPPORTED_RUNTIME_COMMANDS = new Set<AgentRuntimeCommand["type"]>([
+  "js-allocation-start",
+  "js-allocation-status",
+  "js-allocation-stop",
+  "js-allocation-timeline-start",
+  "js-allocation-timeline-status",
+  "js-allocation-timeline-stop",
   "js-memory-sample",
   "js-profile-start",
   "js-profile-status",

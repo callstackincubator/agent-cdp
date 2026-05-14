@@ -182,6 +182,12 @@ export type AgentRuntimeMeasurementCommand = Extract<
   | { type: "js-profile-start" }
   | { type: "js-profile-status" }
   | { type: "js-profile-stop" }
+  | { type: "js-allocation-start" }
+  | { type: "js-allocation-status" }
+  | { type: "js-allocation-stop" }
+  | { type: "js-allocation-timeline-start" }
+  | { type: "js-allocation-timeline-status" }
+  | { type: "js-allocation-timeline-stop" }
   | { type: "js-memory-sample" }
   | { type: "mem-snapshot-capture" }
   | { type: "network-start" }
@@ -209,6 +215,24 @@ export interface JsProfileStatusResponse {
   active: boolean;
   activeName?: string;
   elapsedMs: number;
+  sessionCount: number;
+}
+
+export type JsAllocationStartResponse = null;
+export type JsAllocationStopResponse = string;
+export interface JsAllocationStatusResponse {
+  active: boolean;
+  activeName: string | null;
+  elapsedMs: number | null;
+  sessionCount: number;
+}
+
+export type JsAllocationTimelineStartResponse = null;
+export type JsAllocationTimelineStopResponse = string;
+export interface JsAllocationTimelineStatusResponse {
+  active: boolean;
+  activeName: string | null;
+  elapsedMs: number | null;
   sessionCount: number;
 }
 
