@@ -2,6 +2,7 @@ import { defineConfig } from "tsup";
 
 export default defineConfig({
   entry: {
+    bin: "src/bin.ts",
     cli: "src/cli.ts",
     daemon: "src/daemon.ts",
     index: "src/index.ts",

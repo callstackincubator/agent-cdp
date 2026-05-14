@@ -63,17 +63,13 @@ export interface TraceRecordingSummary {
   filePath?: string;
 }
 
-export interface MemorySnapshotSummary {
-  chunkCount: number;
-  filePath: string;
-}
-
 export type SessionState = "disconnected" | "connecting" | "connected";
 
 export interface DaemonInfo {
   pid: number;
   socketPath: string;
   startedAt: number;
+  version?: string;
   buildMtime?: number;
 }
 
@@ -92,17 +88,64 @@ export type IpcCommand =
   | { type: "list-targets"; options: DiscoveryOptions }
   | { type: "select-target"; targetId: string; options: DiscoveryOptions }
   | { type: "clear-target" }
+  | { type: "runtime-eval"; expression: string; awaitPromise?: boolean }
+  | { type: "runtime-get-properties"; objectId: string; ownProperties?: boolean; accessorPropertiesOnly?: boolean }
+  | { type: "runtime-release-object"; objectId: string }
+  | { type: "runtime-release-object-group"; objectGroup: string }
   | { type: "list-console-messages"; limit?: number }
   | { type: "get-console-message"; id: number }
+  | { type: "network-status" }
+  | { type: "network-start"; name?: string; preserveAcrossNavigation?: boolean }
+  | { type: "network-stop" }
+  | { type: "network-list-sessions"; limit?: number; offset?: number }
+  | {
+      type: "network-summary";
+      sessionId?: string;
+    }
+  | {
+      type: "network-list";
+      sessionId?: string;
+      limit?: number;
+      offset?: number;
+      resourceType?: string;
+      status?: string;
+      method?: string;
+      text?: string;
+      minMs?: number;
+      maxMs?: number;
+      minBytes?: number;
+      maxBytes?: number;
+    }
+  | { type: "network-request"; requestId: string; sessionId?: string }
+  | { type: "network-request-headers"; requestId: string; sessionId?: string; name?: string }
+  | { type: "network-response-headers"; requestId: string; sessionId?: string; name?: string }
+  | { type: "network-request-body"; requestId: string; sessionId?: string; filePath?: string }
+  | { type: "network-response-body"; requestId: string; sessionId?: string; filePath?: string }
   | { type: "start-trace" }
   | { type: "stop-trace"; filePath?: string }
-  | { type: "capture-memory"; filePath: string }
+  | { type: "trace-status" }
+  | { type: "trace-list-sessions"; limit?: number; offset?: number }
+  | { type: "trace-summary"; sessionId?: string }
+  | { type: "trace-tracks"; sessionId?: string; limit?: number; offset?: number; text?: string; group?: string }
+  | {
+      type: "trace-entries";
+      sessionId?: string;
+      track?: string;
+      typeFilter?: "measure" | "mark" | "stamp";
+      text?: string;
+      startMs?: number;
+      endMs?: number;
+      limit?: number;
+      offset?: number;
+      sortBy?: "time" | "duration" | "name";
+    }
+  | { type: "trace-entry"; sessionId?: string; entryId: string }
   | { type: "js-profile-start"; name?: string; samplingIntervalUs?: number }
   | { type: "js-profile-stop" }
   | { type: "js-profile-status" }
   | { type: "js-profile-list-sessions"; limit?: number; offset?: number }
   | { type: "js-profile-summary"; sessionId?: string }
-  | { type: "js-profile-hotspots"; sessionId?: string; limit?: number; offset?: number; sortBy?: string; minSelfMs?: number; includeRuntime?: boolean }
+  | { type: "js-profile-hotspots"; sessionId?: string; limit?: number; offset?: number; sortBy?: string; minSelfMs?: number; minTotalMs?: number; includeRuntime?: boolean }
   | { type: "js-profile-hotspot"; sessionId?: string; hotspotId: string; stackLimit?: number }
   | { type: "js-profile-modules"; sessionId?: string; limit?: number; offset?: number; sortBy?: string }
   | { type: "js-profile-stacks"; sessionId?: string; limit?: number; offset?: number; minMs?: number; maxDepth?: number }
@@ -110,6 +153,35 @@ export type IpcCommand =
   | { type: "js-profile-diff"; baseSessionId: string; compareSessionId: string; limit?: number; minDeltaPct?: number }
   | { type: "js-profile-export"; sessionId?: string }
   | { type: "js-profile-source-maps"; sessionId?: string }
+  // JS allocation profiler
+  | {
+      type: "js-allocation-start";
+      name?: string;
+      samplingIntervalBytes?: number;
+      stackDepth?: number;
+      includeObjectsCollectedByMajorGC?: boolean;
+      includeObjectsCollectedByMinorGC?: boolean;
+    }
+  | { type: "js-allocation-stop" }
+  | { type: "js-allocation-status" }
+  | { type: "js-allocation-list-sessions"; limit?: number; offset?: number }
+  | { type: "js-allocation-summary"; sessionId?: string }
+  | { type: "js-allocation-hotspots"; sessionId?: string; limit?: number; offset?: number; sortBy?: string }
+  | { type: "js-allocation-bucketed"; sessionId?: string; limit?: number }
+  | { type: "js-allocation-leak-signal"; sessionId?: string }
+  | { type: "js-allocation-export"; sessionId?: string; filePath: string }
+  | { type: "js-allocation-source-maps"; sessionId?: string }
+  // JS allocation timeline profiler
+  | { type: "js-allocation-timeline-start"; name?: string }
+  | { type: "js-allocation-timeline-stop" }
+  | { type: "js-allocation-timeline-status" }
+  | { type: "js-allocation-timeline-list-sessions"; limit?: number; offset?: number }
+  | { type: "js-allocation-timeline-summary"; sessionId?: string }
+  | { type: "js-allocation-timeline-buckets"; sessionId?: string; limit?: number }
+  | { type: "js-allocation-timeline-hotspots"; sessionId?: string; limit?: number; offset?: number }
+  | { type: "js-allocation-timeline-leak-signal"; sessionId?: string }
+  | { type: "js-allocation-timeline-export"; sessionId?: string; filePath: string }
+  | { type: "js-allocation-timeline-source-maps"; sessionId?: string }
   // Heap snapshot analysis
   | { type: "mem-snapshot-capture"; name?: string; collectGarbage?: boolean; filePath?: string }
   | { type: "mem-snapshot-load"; filePath: string; name?: string }
@@ -129,7 +201,7 @@ export type IpcCommand =
   | { type: "js-memory-summary" }
   | { type: "js-memory-diff"; baseSampleId: string; compareSampleId: string }
   | { type: "js-memory-trend"; limit?: number }
-  | { type: "js-memory-leak-signal" };
+  | { type: "js-memory-leak-signal"; sinceSampleId?: string };
 
 export interface IpcResponse {
   ok: boolean;

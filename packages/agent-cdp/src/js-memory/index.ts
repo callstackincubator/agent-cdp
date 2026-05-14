@@ -44,8 +44,10 @@ export class JsHeapUsageMonitor {
     return queryTrend(this.store.all(), limit);
   }
 
-  getLeakSignal(): JsMemoryLeakSignalResult {
-    return queryLeakSignal(this.store.all());
+  getLeakSignal(sinceSampleId?: string): JsMemoryLeakSignalResult {
+    return queryLeakSignal(this.store.allSince(sinceSampleId), {
+      scoped: sinceSampleId !== undefined,
+    });
   }
 }
 

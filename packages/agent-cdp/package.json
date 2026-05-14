@@ -1,19 +1,30 @@
 {
   "name": "agent-cdp",
-  "version": "0.0.0",
-  "description": "CLI for agent-friendly CDP access to Chrome and React Native",
+  "version": "1.4.0",
+  "description": "Command-line tool for the Chrome DevTools Protocol (CDP): debug targets, console, traces, heap snapshots, and JavaScript CPU profiling for Chrome, Node.js, and React Native.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/callstackincubator/agent-cdp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/callstackincubator/agent-cdp/issues"
+  },
+  "homepage": "https://github.com/callstackincubator/agent-cdp#readme",
+  "license": "MIT",
   "bin": {
-    "agent-cdp": "./dist/cli.js"
+    "agent-cdp": "./dist/bin.js"
   },
   "exports": {
     ".": "./dist/index.js"
   },
   "files": [
     "dist",
+    "skills",
     "README.md"
   ],
   "scripts": {
+    "prepublishOnly": "pnpm run build",
     "build": "tsup",
     "format": "oxfmt --write \"src/**/*.ts\" package.json tsconfig.json tsup.config.ts vitest.config.ts",
     "format:check": "oxfmt --check \"src/**/*.ts\" package.json tsconfig.json tsup.config.ts vitest.config.ts",
@@ -23,6 +34,7 @@
   },
   "dependencies": {
     "@jridgewell/trace-mapping": "^0.3.31",
+    "commander": "^14.0.3",
     "ws": "^8.18.3"
   },
   "devDependencies": {

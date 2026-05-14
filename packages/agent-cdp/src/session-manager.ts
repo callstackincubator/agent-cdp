@@ -6,7 +6,7 @@ import type {
   TargetDescriptor,
   TargetProvider,
 } from "./types.js";
-import { discoverTargets } from "./discovery.js";
+import { discoverTargets, normalizeDiscoveryUrl, parseTargetId } from "./discovery.js";
 
 export class PersistentRuntimeSession implements RuntimeSession {
   constructor(
@@ -38,7 +38,8 @@ export class SessionManager {
   }
 
   async selectTarget(targetId: string, options: DiscoveryOptions): Promise<TargetDescriptor> {
-    const targets = await this.listTargets(options);
+    const resolvedOptions = this.resolveSelectionOptions(targetId, options);
+    const targets = await this.listTargets(resolvedOptions);
     const target = targets.find((candidate) => candidate.id === targetId);
     if (!target) {
       throw new Error(`Target not found: ${targetId}`);
@@ -58,7 +59,7 @@ export class SessionManager {
       await session.ensureConnected();
       this.session = session;
       this.sessionState = "connected";
-      this.selectedOptions = options;
+      this.selectedOptions = resolvedOptions;
       return target;
     } catch (error) {
       this.sessionState = "disconnected";
@@ -148,5 +149,21 @@ export class SessionManager {
         );
       }) || null
     );
+  }
+
+  private resolveSelectionOptions(targetId: string, options: DiscoveryOptions): DiscoveryOptions {
+    const parsedTarget = parseTargetId(targetId);
+    const resolvedUrl = parsedTarget.sourceUrl;
+
+    if (!options.url) {
+      return { url: resolvedUrl };
+    }
+
+    const normalizedOptionUrl = normalizeDiscoveryUrl(options.url);
+    if (normalizedOptionUrl !== resolvedUrl) {
+      throw new Error(`Target id source does not match --url: ${targetId}`);
+    }
+
+    return { url: normalizedOptionUrl };
   }
 }

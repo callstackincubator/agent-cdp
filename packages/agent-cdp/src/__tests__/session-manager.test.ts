@@ -1,6 +1,9 @@
 import { SessionManager } from "../session-manager.js";
 import type { CdpEventMessage, CdpTransport, TargetDescriptor, TargetProvider } from "../types.js";
 
+const CHROME_TEST_ID = "chrome:ZXhhbXBsZS50ZXN0:page-1";
+const REACT_NATIVE_TEST_ID = "react-native:ZXhhbXBsZS50ZXN0:page-1";
+
 class FakeTransport implements CdpTransport {
   connected = false;
 
@@ -39,7 +42,7 @@ describe("SessionManager", () => {
   it("lists targets from configured providers", async () => {
     const targets = [
       {
-        id: "chrome:test:page-1",
+        id: CHROME_TEST_ID,
         rawId: "page-1",
         title: "Example",
         kind: "chrome" as const,
@@ -55,7 +58,7 @@ describe("SessionManager", () => {
   it("selects and clears a target", async () => {
     const targets = [
       {
-        id: "chrome:test:page-1",
+        id: CHROME_TEST_ID,
         rawId: "page-1",
         title: "Example",
         kind: "chrome" as const,
@@ -65,13 +68,32 @@ describe("SessionManager", () => {
       },
     ];
     const manager = new SessionManager([new FakeProvider()], () => Promise.resolve(targets));
-    await expect(manager.selectTarget("chrome:test:page-1", { url: "http://example.test" })).resolves.toMatchObject({
+    await expect(manager.selectTarget(CHROME_TEST_ID, {})).resolves.toMatchObject({
       title: "Example",
     });
     expect(manager.getSessionState()).toBe("connected");
     await manager.clearTarget();
     expect(manager.getSelectedTarget()).toBeNull();
     expect(manager.getSessionState()).toBe("disconnected");
+  });
+
+  it("rejects mismatched explicit urls when selecting a target", async () => {
+    const targets = [
+      {
+        id: CHROME_TEST_ID,
+        rawId: "page-1",
+        title: "Example",
+        kind: "chrome" as const,
+        description: "Test page",
+        webSocketDebuggerUrl: "ws://example.test/devtools/page/1",
+        sourceUrl: "http://example.test",
+      },
+    ];
+    const manager = new SessionManager([new FakeProvider()], () => Promise.resolve(targets));
+
+    await expect(manager.selectTarget(CHROME_TEST_ID, { url: "http://other.test" })).rejects.toThrow(
+      `Target id source does not match --url: ${CHROME_TEST_ID}`,
+    );
   });
 
   it("reconnects react native targets by logical device id", async () => {
@@ -83,7 +105,7 @@ describe("SessionManager", () => {
         this.attempt += 1;
         return [
           {
-            id: `react-native:test:page-${this.attempt}`,
+            id: `react-native:ZXhhbXBsZS50ZXN0:page-${this.attempt}`,
             rawId: `page-${this.attempt}`,
             title: "React Native Experimental",
             kind: "react-native",
@@ -113,7 +135,7 @@ describe("SessionManager", () => {
         attempt += 1;
         return Promise.resolve([
           {
-            id: `react-native:test:page-${attempt}`,
+            id: `react-native:ZXhhbXBsZS50ZXN0:page-${attempt}`,
             rawId: `page-${attempt}`,
             title: "React Native Experimental",
             kind: "react-native" as const,
@@ -133,7 +155,7 @@ describe("SessionManager", () => {
     })();
 
     const manager = new SessionManager([new FakeReactNativeProvider()], discoverTargetsImpl);
-    await manager.selectTarget("react-native:test:page-1", { url: "http://example.test" });
+    await manager.selectTarget(REACT_NATIVE_TEST_ID, {});
     const session = manager.getSession();
     if (!session) {
       throw new Error("Expected session to exist");

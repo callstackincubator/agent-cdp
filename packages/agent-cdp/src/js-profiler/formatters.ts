@@ -164,6 +164,29 @@ export function formatJsHotspotDetail(result: JsHotspotDetailResult, verbose = f
     }
     lines.push(`  Self:  ${h.selfPercent}% (${h.selfTimeMs}ms, ${h.selfSampleCount} samples)`);
     lines.push(`  Total: ${h.totalPercent}% (${h.totalTimeMs}ms, ${h.totalSampleCount} samples)`);
+    lines.push(`  Delegated to children: ${h.delegatedPercentOfTotal}% (${h.delegatedTimeMs}ms)`);
+    lines.push(
+      `  Repeated work: ${result.occurrence.runCount} runs, avg ${result.occurrence.averageRunMs}ms (${result.occurrence.averageRunSamples} samples), longest ${result.occurrence.longestRunMs}ms (${result.occurrence.longestRunSamples} samples)`,
+    );
+    if (result.occurrence.firstSeenMs !== null && result.occurrence.lastSeenMs !== null) {
+      lines.push(`  Seen between: ${result.occurrence.firstSeenMs}ms and ${result.occurrence.lastSeenMs}ms`);
+    }
+
+    if (result.callers.length > 0) {
+      lines.push("");
+      lines.push("Top callers:");
+      for (const caller of result.callers) {
+        lines.push(`  ${String(caller.percent).padStart(5)}%  ${String(caller.sampleCount).padStart(7)} samples  ${caller.functionName}  ${caller.module}`);
+      }
+    }
+
+    if (result.callees.length > 0) {
+      lines.push("");
+      lines.push("Top callees:");
+      for (const callee of result.callees) {
+        lines.push(`  ${String(callee.percent).padStart(5)}%  ${String(callee.sampleCount).padStart(7)} samples  ${callee.functionName}  ${callee.module}`);
+      }
+    }
 
     if (result.representativeStacks.length > 0) {
       lines.push("");
@@ -177,7 +200,7 @@ export function formatJsHotspotDetail(result: JsHotspotDetailResult, verbose = f
       lines.push("");
       lines.push("Active time ranges:");
       for (const b of result.activeTimeBuckets) {
-        lines.push(`  ${b.startMs}–${b.endMs}ms (${b.sampleCount} samples)`);
+        lines.push(`  ${b.startMs}–${b.endMs}ms (${b.sampleCount} samples, ${b.percentOfHotspotSamples}% of hotspot self time)`);
       }
     }
 
@@ -201,7 +224,8 @@ export function formatJsHotspotDetail(result: JsHotspotDetailResult, verbose = f
     location = ` ${f.url}:${f.lineNumber + 1}:${f.columnNumber}`;
   }
   lines.push(`${h.hotspotId} ${f.functionName} (${f.moduleName})${location}`);
-  lines.push(`  self:${h.selfPercent}% ${h.selfTimeMs}ms  total:${h.totalPercent}% ${h.totalTimeMs}ms`);
+  lines.push(`  self:${h.selfPercent}% ${h.selfTimeMs}ms  total:${h.totalPercent}% ${h.totalTimeMs}ms  child:${h.delegatedTimeMs}ms`);
+  lines.push(`  runs:${result.occurrence.runCount} avg:${result.occurrence.averageRunMs}ms max:${result.occurrence.longestRunMs}ms`);
   for (const s of result.representativeStacks) {
     lines.push(`  ${s.stackId} ${s.percent}% ${s.frames.join(" → ")}`);
   }

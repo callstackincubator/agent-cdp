@@ -22,7 +22,7 @@ export interface RawHeapSnapshotJson {
   locations?: number[];
   samples?: number[];
   trace_function_infos?: number[];
-  trace_tree?: number[];
+  trace_tree?: unknown[];
 }
 
 // Working representation after parsing

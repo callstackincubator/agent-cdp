@@ -72,6 +72,12 @@ export interface JsMemoryTrendResult {
 export interface JsMemoryLeakSignalResult {
   suspicionScore: number;
   level: "none" | "low" | "medium" | "high";
+  confidence: "low" | "medium" | "high";
+  sampleCount: number;
+  scope: "full-history" | "bounded";
+  windowStartSampleId: string | null;
+  windowEndSampleId: string | null;
   evidence: string[];
+  qualityNotes: string[];
   caveat: string;
 }

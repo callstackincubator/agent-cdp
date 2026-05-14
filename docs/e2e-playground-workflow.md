@@ -19,8 +19,9 @@ Validate the real user flow and the runtime inspection flow together:
 6. Tap `Create transient churn` and compare the result against retained-memory actions.
 7. Tap `Emit console burst` and inspect the info, warning, and handled error entries in `agent-cdp` console output.
 8. Tap `Run CPU hotspot` and `Run async burst` when validating trace or JS profiling commands.
-9. Tap `Log inspection payload` and inspect the emitted runtime payload with agent-cdp console or runtime tooling.
-10. Tap `Clear retained batches` and confirm the store is empty in the UI and the retained-memory signal drops.
+9. Tap `Run network burst` when validating network capture, request summaries, bodies, or headers.
+10. Tap `Log inspection payload` and inspect the emitted runtime payload with agent-cdp console or runtime tooling.
+11. Tap `Clear retained batches` and confirm the store is empty in the UI and the retained-memory signal drops.
 
 ## Expected Playground Signals
 
@@ -31,6 +32,7 @@ The current playground exposes these signals:
 3. Transient allocation churn for comparison.
 4. Structured console payloads for runtime inspection.
 5. Synchronous and asynchronous CPU-heavy workloads for trace and JS profiler validation.
+6. Successful and failing local HTTP requests for network inspection validation.
 
 ## Reporting
 

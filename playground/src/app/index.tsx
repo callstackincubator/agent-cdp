@@ -108,6 +108,29 @@ function createInspectionPayload() {
   };
 }
 
+function markTrace(name: string) {
+  if (typeof performance?.mark === 'function') {
+    performance.mark(name);
+  }
+}
+
+function measureTrace(name: string, startMark: string, endMark: string) {
+  if (typeof performance?.measure === 'function') {
+    performance.measure(name, startMark, endMark);
+  }
+}
+
+async function fetchJson(url: string) {
+  const response = await fetch(url);
+  const text = await response.text();
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    bytes: text.length,
+  };
+}
+
 function ScenarioButton({
   label,
   onPress,
@@ -180,15 +203,45 @@ export default function HomeScreen() {
   }
 
   function runProfileHotspot() {
+    const startMark = `cpu-hotspot-start-${Date.now()}`;
+    const endMark = `cpu-hotspot-end-${Date.now()}`;
+    markTrace(startMark);
     const summary = runCpuHotspot(Date.now());
+    markTrace(endMark);
+    measureTrace('playground:cpu-hotspot', startMark, endMark);
     console.log('[playground] cpu hotspot summary', summary);
     logState('cpu-hotspot');
   }
 
   async function runAsyncProfileBurst() {
+    const startMark = `async-burst-start-${Date.now()}`;
+    markTrace(startMark);
     const summary = await runAsyncBurst(Date.now());
+    const endMark = `async-burst-end-${Date.now()}`;
+    markTrace(endMark);
+    measureTrace('playground:async-burst', startMark, endMark);
     console.log('[playground] async burst summary', summary);
     logState('async-burst');
+  }
+
+  async function runNetworkBurst() {
+    const startMark = `network-burst-start-${Date.now()}`;
+    markTrace(startMark);
+
+    const [targetList, missingRoute] = await Promise.all([
+      fetchJson('http://127.0.0.1:8081/json/list'),
+      fetchJson('http://127.0.0.1:8081/does-not-exist'),
+    ]);
+
+    const endMark = `network-burst-end-${Date.now()}`;
+    markTrace(endMark);
+    measureTrace('playground:network-burst', startMark, endMark);
+
+    console.log('[playground] network burst summary', {
+      targetList,
+      missingRoute,
+    });
+    logState('network-burst');
   }
 
   function logSamplePayload() {
@@ -208,6 +261,7 @@ export default function HomeScreen() {
           <ScenarioButton label="Emit console burst" onPress={emitConsoleBurst} />
           <ScenarioButton label="Run CPU hotspot" onPress={runProfileHotspot} />
           <ScenarioButton label="Run async burst" onPress={runAsyncProfileBurst} />
+          <ScenarioButton label="Run network burst" onPress={runNetworkBurst} />
           <ScenarioButton label="Log inspection payload" onPress={logSamplePayload} />
           <ScenarioButton label="Clear retained batches" onPress={clearRetainedBatches} variant="danger" />
         </ThemedView>

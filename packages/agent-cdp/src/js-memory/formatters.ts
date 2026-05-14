@@ -212,11 +212,19 @@ export function formatJsMemoryLeakSignal(result: JsMemoryLeakSignalResult, verbo
     const lines: string[] = [];
     lines.push(`JS Memory Leak Signal:`);
     lines.push(`  Level:  ${result.level.toUpperCase()} (score: ${result.suspicionScore})`);
+    lines.push(`  Confidence: ${result.confidence.toUpperCase()}`);
+    lines.push(`  Scope: ${result.scope === "bounded" ? "bounded window" : "full daemon history"} (${result.sampleCount} sample${result.sampleCount === 1 ? "" : "s"}, ${result.windowStartSampleId ?? "n/a"} -> ${result.windowEndSampleId ?? "n/a"})`);
 
     if (result.evidence.length > 0) {
       lines.push("");
       lines.push("Evidence:");
       for (const e of result.evidence) lines.push(`  - ${e}`);
+    }
+
+    if (result.qualityNotes.length > 0) {
+      lines.push("");
+      lines.push("Quality notes:");
+      for (const note of result.qualityNotes) lines.push(`  - ${note}`);
     }
 
     lines.push("");
@@ -225,5 +233,11 @@ export function formatJsMemoryLeakSignal(result: JsMemoryLeakSignalResult, verbo
     return lines.join("\n");
   }
 
-  return `${result.level.toUpperCase()} score:${result.suspicionScore}`;
+  const lines = [
+    `${result.level.toUpperCase()} confidence:${result.confidence} score:${result.suspicionScore} scope:${result.scope} samples:${result.sampleCount}`,
+  ];
+  if (result.qualityNotes.length > 0) {
+    lines.push(`note: ${result.qualityNotes[0]}`);
+  }
+  return lines.join("\n");
 }
