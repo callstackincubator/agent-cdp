@@ -1,4 +1,20 @@
-import { cpuProfile, type JsProfileStatusResponse } from '@agent-cdp/sdk';
+import {
+  allocation,
+  allocationTimeline,
+  cpuProfile,
+  memorySnapshot,
+  memoryUsage,
+  network,
+  trace,
+  type JsAllocationStatusResponse,
+  type JsAllocationTimelineStatusResponse,
+  type JsMemorySampleResponse,
+  type JsProfileStatusResponse,
+  type MemSnapshotCaptureResponse,
+  type NetworkStatusResponse,
+  type TraceStatusResponse,
+  type TraceStopResponse,
+} from '@agent-cdp/sdk';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -175,12 +191,48 @@ function ScenarioButton({
   );
 }
 
+function formatTimestamp(timestamp: number) {
+  return new Date(timestamp).toLocaleTimeString();
+}
+
+function formatMaybeMs(value: number | null) {
+  return value === null ? 'unknown' : String(value);
+}
+
+function formatBytes(value: number) {
+  return `${Math.round(value / 1024)} KB`;
+}
+
 export default function HomeScreen() {
-  const [sdkFlowPending, setSdkFlowPending] = useState(false);
+  const [sdkBusy, setSdkBusy] = useState(false);
   const [sdkFlowMessage, setSdkFlowMessage] = useState('Select the app target with agent-cdp, then run the SDK CPU profile flow.');
   const [sdkFlowError, setSdkFlowError] = useState<string | null>(null);
   const [sdkStatus, setSdkStatus] = useState<JsProfileStatusResponse | null>(null);
   const [lastSdkProfileSessionId, setLastSdkProfileSessionId] = useState<string | null>(null);
+  const [traceStatus, setTraceStatus] = useState<TraceStatusResponse | null>(null);
+  const [traceMessage, setTraceMessage] = useState('Run a trace flow to capture a bounded trace session.');
+  const [traceError, setTraceError] = useState<string | null>(null);
+  const [lastTraceResult, setLastTraceResult] = useState<TraceStopResponse | null>(null);
+  const [networkStatusState, setNetworkStatusState] = useState<NetworkStatusResponse | null>(null);
+  const [networkMessage, setNetworkMessage] = useState('Run a network flow to capture a bounded network session.');
+  const [networkError, setNetworkError] = useState<string | null>(null);
+  const [lastNetworkSessionId, setLastNetworkSessionId] = useState<string | null>(null);
+  const [allocationStatusState, setAllocationStatusState] = useState<JsAllocationStatusResponse | null>(null);
+  const [allocationMessage, setAllocationMessage] = useState('Run an allocation flow to capture sampled allocations.');
+  const [allocationError, setAllocationError] = useState<string | null>(null);
+  const [lastAllocationSessionId, setLastAllocationSessionId] = useState<string | null>(null);
+  const [allocationTimelineStatusState, setAllocationTimelineStatusState] = useState<JsAllocationTimelineStatusResponse | null>(null);
+  const [allocationTimelineMessage, setAllocationTimelineMessage] = useState(
+    'Run an allocation timeline flow to capture timeline allocation data.',
+  );
+  const [allocationTimelineError, setAllocationTimelineError] = useState<string | null>(null);
+  const [lastAllocationTimelineSessionId, setLastAllocationTimelineSessionId] = useState<string | null>(null);
+  const [lastMemorySample, setLastMemorySample] = useState<JsMemorySampleResponse | null>(null);
+  const [memorySampleMessage, setMemorySampleMessage] = useState('Take a JS heap usage sample from the SDK.');
+  const [memorySampleError, setMemorySampleError] = useState<string | null>(null);
+  const [lastMemorySnapshot, setLastMemorySnapshot] = useState<MemSnapshotCaptureResponse | null>(null);
+  const [memorySnapshotMessage, setMemorySnapshotMessage] = useState('Capture a heap snapshot from the SDK.');
+  const [memorySnapshotError, setMemorySnapshotError] = useState<string | null>(null);
 
   async function refreshSdkCpuProfileStatus() {
     const status = await cpuProfile.status();
@@ -256,7 +308,7 @@ export default function HomeScreen() {
   }
 
   async function runSdkCpuProfileFlow() {
-    setSdkFlowPending(true);
+    setSdkBusy(true);
     setLastSdkProfileSessionId(null);
     setSdkFlowError(null);
     setSdkFlowMessage('Checking current SDK CPU profile status...');
@@ -314,7 +366,241 @@ export default function HomeScreen() {
         // Preserve the original failure when status refresh is unavailable.
       }
     } finally {
-      setSdkFlowPending(false);
+      setSdkBusy(false);
+    }
+  }
+
+  async function refreshTraceStatus() {
+    const status = await trace.status();
+    setTraceStatus(status);
+    setTraceError(null);
+    setTraceMessage('SDK trace status refreshed.');
+    return status;
+  }
+
+  async function runSdkTraceFlow() {
+    setSdkBusy(true);
+    setTraceError(null);
+    setLastTraceResult(null);
+    setTraceMessage('Checking current SDK trace status...');
+
+    try {
+      const initialStatus = await trace.status();
+      setTraceStatus(initialStatus);
+
+      if (initialStatus.active) {
+        const previousResult = await trace.stop();
+        console.warn('[playground] stopped existing SDK trace before test flow', previousResult);
+      }
+
+      setTraceMessage('Starting SDK trace...');
+      await trace.start();
+
+      const startMark = `sdk-trace-start-${Date.now()}`;
+      markTrace(startMark);
+      runProfileHotspot();
+      await runAsyncProfileBurst();
+      const endMark = `sdk-trace-end-${Date.now()}`;
+      markTrace(endMark);
+      measureTrace('playground:sdk-trace-flow', startMark, endMark);
+
+      setTraceMessage('Stopping SDK trace...');
+      const result = await trace.stop();
+      setLastTraceResult(result);
+      const finalStatus = await trace.status();
+      setTraceStatus(finalStatus);
+      setTraceMessage(`Trace captured. Session ID: ${result.sessionId}`);
+      logState('sdk-trace-flow');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setTraceError(message);
+      setTraceMessage(`SDK trace flow failed: ${message}`);
+    } finally {
+      setSdkBusy(false);
+    }
+  }
+
+  async function refreshNetworkStatus() {
+    const status = await network.status();
+    setNetworkStatusState(status);
+    setNetworkError(null);
+    setNetworkMessage('SDK network status refreshed.');
+    return status;
+  }
+
+  async function runSdkNetworkFlow() {
+    setSdkBusy(true);
+    setNetworkError(null);
+    setLastNetworkSessionId(null);
+    setNetworkMessage('Checking current SDK network status...');
+
+    try {
+      const initialStatus = await network.status();
+      setNetworkStatusState(initialStatus);
+
+      if (initialStatus.activeSession) {
+        const previousSessionId = await network.stop();
+        console.warn('[playground] stopped existing SDK network session before test flow', {
+          previousSessionId,
+          initialStatus,
+        });
+      }
+
+      setNetworkMessage('Starting SDK network capture...');
+      await network.start({ name: `playground-network-${Date.now()}` });
+      await runNetworkBurst();
+
+      setNetworkMessage('Stopping SDK network capture...');
+      const sessionId = await network.stop();
+      setLastNetworkSessionId(sessionId);
+      const finalStatus = await network.status();
+      setNetworkStatusState(finalStatus);
+      setNetworkMessage(`Network capture stored. Session ID: ${sessionId}`);
+      logState('sdk-network-flow');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setNetworkError(message);
+      setNetworkMessage(`SDK network flow failed: ${message}`);
+    } finally {
+      setSdkBusy(false);
+    }
+  }
+
+  async function refreshAllocationStatus() {
+    const status = await allocation.status();
+    setAllocationStatusState(status);
+    setAllocationError(null);
+    setAllocationMessage('SDK allocation status refreshed.');
+    return status;
+  }
+
+  async function runSdkAllocationFlow() {
+    setSdkBusy(true);
+    setAllocationError(null);
+    setLastAllocationSessionId(null);
+    setAllocationMessage('Checking current SDK allocation status...');
+
+    try {
+      const initialStatus = await allocation.status();
+      setAllocationStatusState(initialStatus);
+
+      if (initialStatus.active) {
+        const previousSessionId = await allocation.stop();
+        console.warn('[playground] stopped existing SDK allocation session before test flow', {
+          previousSessionId,
+          initialStatus,
+        });
+      }
+
+      setAllocationMessage('Starting SDK allocation capture...');
+      await allocation.start({ name: `playground-allocation-${Date.now()}` });
+      retainSmallBatch();
+      createTransientObjects();
+
+      setAllocationMessage('Stopping SDK allocation capture...');
+      const sessionId = await allocation.stop();
+      setLastAllocationSessionId(sessionId);
+      const finalStatus = await allocation.status();
+      setAllocationStatusState(finalStatus);
+      setAllocationMessage(`Allocation capture stored. Session ID: ${sessionId}`);
+      logState('sdk-allocation-flow');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setAllocationError(message);
+      setAllocationMessage(`SDK allocation flow failed: ${message}`);
+    } finally {
+      setSdkBusy(false);
+    }
+  }
+
+  async function refreshAllocationTimelineStatus() {
+    const status = await allocationTimeline.status();
+    setAllocationTimelineStatusState(status);
+    setAllocationTimelineError(null);
+    setAllocationTimelineMessage('SDK allocation timeline status refreshed.');
+    return status;
+  }
+
+  async function runSdkAllocationTimelineFlow() {
+    setSdkBusy(true);
+    setAllocationTimelineError(null);
+    setLastAllocationTimelineSessionId(null);
+    setAllocationTimelineMessage('Checking current SDK allocation timeline status...');
+
+    try {
+      const initialStatus = await allocationTimeline.status();
+      setAllocationTimelineStatusState(initialStatus);
+
+      if (initialStatus.active) {
+        const previousSessionId = await allocationTimeline.stop();
+        console.warn('[playground] stopped existing SDK allocation timeline session before test flow', {
+          previousSessionId,
+          initialStatus,
+        });
+      }
+
+      setAllocationTimelineMessage('Starting SDK allocation timeline capture...');
+      await allocationTimeline.start({ name: `playground-allocation-timeline-${Date.now()}` });
+      retainLargeBatch();
+      createTransientObjects();
+
+      setAllocationTimelineMessage('Stopping SDK allocation timeline capture...');
+      const sessionId = await allocationTimeline.stop();
+      setLastAllocationTimelineSessionId(sessionId);
+      const finalStatus = await allocationTimeline.status();
+      setAllocationTimelineStatusState(finalStatus);
+      setAllocationTimelineMessage(`Allocation timeline stored. Session ID: ${sessionId}`);
+      logState('sdk-allocation-timeline-flow');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setAllocationTimelineError(message);
+      setAllocationTimelineMessage(`SDK allocation timeline flow failed: ${message}`);
+    } finally {
+      setSdkBusy(false);
+    }
+  }
+
+  async function takeMemoryUsageSample() {
+    setSdkBusy(true);
+    setMemorySampleError(null);
+    setMemorySampleMessage('Taking SDK JS memory sample...');
+
+    try {
+      const sample = await memoryUsage.sample({
+        label: `playground-memory-sample-${Date.now()}`,
+        collectGarbage: true,
+      });
+      setLastMemorySample(sample);
+      setMemorySampleMessage(`Memory sample captured. Sample ID: ${sample.sampleId}`);
+      logState('sdk-memory-sample');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMemorySampleError(message);
+      setMemorySampleMessage(`SDK memory sample failed: ${message}`);
+    } finally {
+      setSdkBusy(false);
+    }
+  }
+
+  async function captureMemorySnapshot() {
+    setSdkBusy(true);
+    setMemorySnapshotError(null);
+    setMemorySnapshotMessage('Capturing SDK memory snapshot...');
+
+    try {
+      const snapshot = await memorySnapshot.capture({
+        name: `playground-memory-snapshot-${Date.now()}`,
+        collectGarbage: true,
+      });
+      setLastMemorySnapshot(snapshot);
+      setMemorySnapshotMessage(`Memory snapshot captured. Snapshot ID: ${snapshot.snapshotId}`);
+      logState('sdk-memory-snapshot');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMemorySnapshotError(message);
+      setMemorySnapshotMessage(`SDK memory snapshot failed: ${message}`);
+    } finally {
+      setSdkBusy(false);
     }
   }
 
@@ -376,17 +662,87 @@ export default function HomeScreen() {
             </ThemedText>
             <ThemedView style={styles.buttonGroup}>
               <ScenarioButton
-                disabled={sdkFlowPending}
-                label={sdkFlowPending ? 'Running SDK CPU profile flow...' : 'Run SDK CPU profile flow'}
+                disabled={sdkBusy}
+                label={sdkBusy ? 'Running SDK CPU profile flow...' : 'Run SDK CPU profile flow'}
                 onPress={() => {
                   void runSdkCpuProfileFlow();
                 }}
               />
               <ScenarioButton
-                disabled={sdkFlowPending}
+                disabled={sdkBusy}
                 label="Refresh SDK profile status"
                 onPress={() => {
                   void refreshSdkCpuProfileStatus();
+                }}
+              />
+              <ScenarioButton
+                disabled={sdkBusy}
+                label="Run SDK trace flow"
+                onPress={() => {
+                  void runSdkTraceFlow();
+                }}
+              />
+              <ScenarioButton
+                disabled={sdkBusy}
+                label="Refresh SDK trace status"
+                onPress={() => {
+                  void refreshTraceStatus();
+                }}
+              />
+              <ScenarioButton
+                disabled={sdkBusy}
+                label="Run SDK network flow"
+                onPress={() => {
+                  void runSdkNetworkFlow();
+                }}
+              />
+              <ScenarioButton
+                disabled={sdkBusy}
+                label="Refresh SDK network status"
+                onPress={() => {
+                  void refreshNetworkStatus();
+                }}
+              />
+              <ScenarioButton
+                disabled={sdkBusy}
+                label="Run SDK allocation flow"
+                onPress={() => {
+                  void runSdkAllocationFlow();
+                }}
+              />
+              <ScenarioButton
+                disabled={sdkBusy}
+                label="Refresh SDK allocation status"
+                onPress={() => {
+                  void refreshAllocationStatus();
+                }}
+              />
+              <ScenarioButton
+                disabled={sdkBusy}
+                label="Run SDK allocation timeline flow"
+                onPress={() => {
+                  void runSdkAllocationTimelineFlow();
+                }}
+              />
+              <ScenarioButton
+                disabled={sdkBusy}
+                label="Refresh SDK allocation timeline status"
+                onPress={() => {
+                  void refreshAllocationTimelineStatus();
+                }}
+              />
+              <ScenarioButton
+                disabled={sdkBusy}
+                label="Take SDK memory sample"
+                onPress={() => {
+                  void takeMemoryUsageSample();
+                }}
+              />
+              <ScenarioButton
+                disabled={sdkBusy}
+                label="Capture SDK memory snapshot"
+                onPress={() => {
+                  void captureMemorySnapshot();
                 }}
               />
             </ThemedView>
@@ -406,6 +762,117 @@ export default function HomeScreen() {
                 <ThemedText selectable style={styles.sessionId} type="code">
                   Last session ID: {lastSdkProfileSessionId}
                 </ThemedText>
+              ) : null}
+            </ThemedView>
+            <ThemedView style={styles.statusCard}>
+              <ThemedText type="smallBold">SDK Trace E2E</ThemedText>
+              <ThemedText style={styles.statusHelp} themeColor="textSecondary" type="small">
+                Starts a trace, runs a small traced workload, then stops and reports the stored session.
+              </ThemedText>
+              <ThemedText type="small">Active: {traceStatus ? (traceStatus.active ? 'yes' : 'no') : 'unknown'}</ThemedText>
+              <ThemedText type="small">Sessions recorded: {traceStatus?.sessionCount ?? 'unknown'}</ThemedText>
+              <ThemedText type="small">Elapsed ms: {formatMaybeMs(traceStatus?.elapsedMs ?? null)}</ThemedText>
+              <ThemedText style={traceError ? styles.statusError : styles.statusMessage} type="small">
+                {traceMessage}
+              </ThemedText>
+              {lastTraceResult ? (
+                <ThemedText selectable style={styles.sessionId} type="code">
+                  Last session ID: {lastTraceResult.sessionId}
+                </ThemedText>
+              ) : null}
+            </ThemedView>
+            <ThemedView style={styles.statusCard}>
+              <ThemedText type="smallBold">SDK Network E2E</ThemedText>
+              <ThemedText style={styles.statusHelp} themeColor="textSecondary" type="small">
+                Starts a bounded network capture, runs the local burst, then stops and reports the stored session.
+              </ThemedText>
+              <ThemedText type="small">Attached: {networkStatusState ? (networkStatusState.attached ? 'yes' : 'no') : 'unknown'}</ThemedText>
+              <ThemedText type="small">Live requests: {networkStatusState?.liveRequestCount ?? 'unknown'}</ThemedText>
+              <ThemedText type="small">Stored sessions: {networkStatusState?.storedSessionCount ?? 'unknown'}</ThemedText>
+              <ThemedText type="small">
+                Active session: {networkStatusState?.activeSession?.name ?? networkStatusState?.activeSession?.id ?? 'none'}
+              </ThemedText>
+              <ThemedText style={networkError ? styles.statusError : styles.statusMessage} type="small">
+                {networkMessage}
+              </ThemedText>
+              {lastNetworkSessionId ? (
+                <ThemedText selectable style={styles.sessionId} type="code">
+                  Last session ID: {lastNetworkSessionId}
+                </ThemedText>
+              ) : null}
+            </ThemedView>
+            <ThemedView style={styles.statusCard}>
+              <ThemedText type="smallBold">SDK Allocation E2E</ThemedText>
+              <ThemedText style={styles.statusHelp} themeColor="textSecondary" type="small">
+                Starts sampled allocation capture around retained-object and transient-churn work.
+              </ThemedText>
+              <ThemedText type="small">Active: {allocationStatusState ? (allocationStatusState.active ? 'yes' : 'no') : 'unknown'}</ThemedText>
+              <ThemedText type="small">Sessions recorded: {allocationStatusState?.sessionCount ?? 'unknown'}</ThemedText>
+              <ThemedText type="small">Elapsed ms: {formatMaybeMs(allocationStatusState?.elapsedMs ?? null)}</ThemedText>
+              <ThemedText type="small">Active name: {allocationStatusState?.activeName ?? 'none'}</ThemedText>
+              <ThemedText style={allocationError ? styles.statusError : styles.statusMessage} type="small">
+                {allocationMessage}
+              </ThemedText>
+              {lastAllocationSessionId ? (
+                <ThemedText selectable style={styles.sessionId} type="code">
+                  Last session ID: {lastAllocationSessionId}
+                </ThemedText>
+              ) : null}
+            </ThemedView>
+            <ThemedView style={styles.statusCard}>
+              <ThemedText type="smallBold">SDK Allocation Timeline E2E</ThemedText>
+              <ThemedText style={styles.statusHelp} themeColor="textSecondary" type="small">
+                Starts allocation timeline capture around a larger retained-object workload.
+              </ThemedText>
+              <ThemedText type="small">
+                Active: {allocationTimelineStatusState ? (allocationTimelineStatusState.active ? 'yes' : 'no') : 'unknown'}
+              </ThemedText>
+              <ThemedText type="small">Sessions recorded: {allocationTimelineStatusState?.sessionCount ?? 'unknown'}</ThemedText>
+              <ThemedText type="small">Elapsed ms: {formatMaybeMs(allocationTimelineStatusState?.elapsedMs ?? null)}</ThemedText>
+              <ThemedText type="small">Active name: {allocationTimelineStatusState?.activeName ?? 'none'}</ThemedText>
+              <ThemedText style={allocationTimelineError ? styles.statusError : styles.statusMessage} type="small">
+                {allocationTimelineMessage}
+              </ThemedText>
+              {lastAllocationTimelineSessionId ? (
+                <ThemedText selectable style={styles.sessionId} type="code">
+                  Last session ID: {lastAllocationTimelineSessionId}
+                </ThemedText>
+              ) : null}
+            </ThemedView>
+            <ThemedView style={styles.statusCard}>
+              <ThemedText type="smallBold">SDK Memory Usage Sample</ThemedText>
+              <ThemedText style={styles.statusHelp} themeColor="textSecondary" type="small">
+                Captures a single JS heap usage sample and stores the returned sample ID.
+              </ThemedText>
+              <ThemedText style={memorySampleError ? styles.statusError : styles.statusMessage} type="small">
+                {memorySampleMessage}
+              </ThemedText>
+              {lastMemorySample ? (
+                <>
+                  <ThemedText selectable style={styles.sessionId} type="code">
+                    Sample ID: {lastMemorySample.sampleId}
+                  </ThemedText>
+                  <ThemedText type="small">Used heap: {formatBytes(lastMemorySample.usedJSHeapSize)}</ThemedText>
+                  <ThemedText type="small">Captured at: {formatTimestamp(lastMemorySample.timestamp)}</ThemedText>
+                </>
+              ) : null}
+            </ThemedView>
+            <ThemedView style={styles.statusCard}>
+              <ThemedText type="smallBold">SDK Memory Snapshot</ThemedText>
+              <ThemedText style={styles.statusHelp} themeColor="textSecondary" type="small">
+                Captures a heap snapshot and stores the returned snapshot ID for later CLI analysis.
+              </ThemedText>
+              <ThemedText style={memorySnapshotError ? styles.statusError : styles.statusMessage} type="small">
+                {memorySnapshotMessage}
+              </ThemedText>
+              {lastMemorySnapshot ? (
+                <>
+                  <ThemedText selectable style={styles.sessionId} type="code">
+                    Snapshot ID: {lastMemorySnapshot.snapshotId}
+                  </ThemedText>
+                  <ThemedText type="small">Nodes: {lastMemorySnapshot.nodeCount}</ThemedText>
+                  <ThemedText type="small">Captured at: {formatTimestamp(lastMemorySnapshot.capturedAt)}</ThemedText>
+                </>
               ) : null}
             </ThemedView>
           </ThemedView>
