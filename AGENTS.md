@@ -2,6 +2,10 @@
 
 Minimal operating guide for AI coding agents in this repo.
 
+## E2E Validation
+- For changes that affect runtime inspection, memory tooling, agent workflows, or validation flows, validate end-to-end through the Expo app in `./playground`.
+- Reference: `docs/e2e-playground-workflow.md`
+
 ## First Minute
 - Classify the task first:
   - Info-only, review, triage, docs: no code edits and no test runs unless explicitly requested.
