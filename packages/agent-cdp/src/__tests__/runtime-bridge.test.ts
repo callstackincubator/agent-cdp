@@ -110,6 +110,45 @@ describe("AgentRuntimeBridge", () => {
     expect(String(transport.sent[2]?.params?.expression)).toContain('\\"active\\":true');
   });
 
+  it("routes network measurement commands through the dispatcher", async () => {
+    const dispatched: unknown[] = [];
+    const dispatcher = {
+      dispatch: async (command: unknown) => {
+        dispatched.push(command);
+        return {
+          ok: true,
+          data: {
+            attached: true,
+            liveRequestCount: 1,
+            liveBufferLimit: 200,
+            activeSession: {
+              id: "net_1",
+              startedAt: 10,
+              preserveAcrossNavigation: false,
+              requestCount: 1,
+            },
+            storedSessionCount: 1,
+          },
+        };
+      },
+    } as AgentCdpCommandDispatcher;
+    const transport = new FakeBridgeTransport();
+    const bridge = new AgentRuntimeBridge(dispatcher);
+
+    await bridge.attach(createSession(transport));
+    transport.emit({
+      method: "Runtime.bindingCalled",
+      params: {
+        name: AGENT_CDP_BINDING_NAME,
+        payload: JSON.stringify({ id: "1", command: { type: "network-status" } }),
+      },
+    });
+    await Promise.resolve();
+
+    expect(dispatched).toEqual([{ type: "network-status" }]);
+    expect(String(transport.sent[2]?.params?.expression)).toContain('\\"id\\":\\"net_1\\"');
+  });
+
   it("reinstalls the runtime binding after execution context resets", async () => {
     const dispatcher = {
       dispatch: vi.fn(),

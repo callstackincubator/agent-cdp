@@ -4,6 +4,9 @@ import {
   type AgentRuntimeBridgeResponse,
   type AgentRuntimeCommand,
   type JsProfileStatusResponse,
+  type NetworkStartResponse,
+  type NetworkStatusResponse,
+  type NetworkStopResponse,
   type TraceStatusResponse,
   type TraceStopResponse,
 } from "@agent-cdp/protocol";
@@ -65,6 +68,22 @@ export class AgentRuntimeClient {
 
   stopCpuProfile(): Promise<string> {
     return this.send({ type: "js-profile-stop" }) as Promise<string>;
+  }
+
+  startNetwork(options: { name?: string; preserveAcrossNavigation?: boolean } = {}): Promise<NetworkStartResponse> {
+    return this.send({
+      type: "network-start",
+      name: options.name,
+      preserveAcrossNavigation: options.preserveAcrossNavigation,
+    }) as Promise<NetworkStartResponse>;
+  }
+
+  getNetworkStatus(): Promise<NetworkStatusResponse> {
+    return this.send({ type: "network-status" }) as Promise<NetworkStatusResponse>;
+  }
+
+  stopNetwork(): Promise<NetworkStopResponse> {
+    return this.send({ type: "network-stop" }) as Promise<NetworkStopResponse>;
   }
 
   startTrace(): Promise<string> {
@@ -151,4 +170,17 @@ export const trace = {
   stop: () => defaultClient.stopTrace(),
 };
 
-export type { JsProfileStatusResponse, TraceStatusResponse, TraceStopResponse } from "@agent-cdp/protocol";
+export const network = {
+  start: (options?: { name?: string; preserveAcrossNavigation?: boolean }) => defaultClient.startNetwork(options),
+  status: () => defaultClient.getNetworkStatus(),
+  stop: () => defaultClient.stopNetwork(),
+};
+
+export type {
+  JsProfileStatusResponse,
+  NetworkStartResponse,
+  NetworkStatusResponse,
+  NetworkStopResponse,
+  TraceStatusResponse,
+  TraceStopResponse,
+} from "@agent-cdp/protocol";

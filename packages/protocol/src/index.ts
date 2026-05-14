@@ -182,6 +182,9 @@ export type AgentRuntimeMeasurementCommand = Extract<
   | { type: "js-profile-start" }
   | { type: "js-profile-status" }
   | { type: "js-profile-stop" }
+  | { type: "network-start" }
+  | { type: "network-status" }
+  | { type: "network-stop" }
   | { type: "start-trace" }
   | { type: "trace-status" }
   | { type: "stop-trace" }
@@ -212,6 +215,22 @@ export interface TraceStatusResponse {
   active: boolean;
   elapsedMs: number | null;
   sessionCount: number;
+}
+
+export type NetworkStartResponse = string;
+export type NetworkStopResponse = string;
+export interface NetworkStatusResponse {
+  attached: boolean;
+  liveRequestCount: number;
+  liveBufferLimit: number;
+  activeSession: {
+    id: string;
+    name?: string;
+    startedAt: number;
+    preserveAcrossNavigation: boolean;
+    requestCount: number;
+  } | null;
+  storedSessionCount: number;
 }
 
 export interface TraceStopResponse {

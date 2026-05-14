@@ -60,6 +60,78 @@ describe("AgentRuntimeClient", () => {
     expect(request.command).toEqual({ type: "stop-trace" });
   });
 
+  it("sends network measurement commands and resolves typed bridge responses", async () => {
+    const sent: string[] = [];
+    agentCdpGlobals()[AGENT_CDP_BINDING_NAME] = (payload: string) => {
+      sent.push(payload);
+    };
+    const client = new AgentRuntimeClient();
+
+    const promise = client.startNetwork({ name: "checkout", preserveAcrossNavigation: true });
+    await Promise.resolve();
+    const request = JSON.parse(sent[0] || "{}");
+    (agentCdpGlobals()[AGENT_CDP_RECEIVE_NAME] as (payload: string) => void)(
+      JSON.stringify({
+        id: request.id,
+        ok: true,
+        data: "net_2",
+      }),
+    );
+
+    await expect(promise).resolves.toBe("net_2");
+    expect(request.command).toEqual({
+      type: "network-start",
+      name: "checkout",
+      preserveAcrossNavigation: true,
+    });
+  });
+
+  it("requests network status through the runtime bridge", async () => {
+    const sent: string[] = [];
+    agentCdpGlobals()[AGENT_CDP_BINDING_NAME] = (payload: string) => {
+      sent.push(payload);
+    };
+    const client = new AgentRuntimeClient();
+
+    const promise = client.getNetworkStatus();
+    await Promise.resolve();
+    const request = JSON.parse(sent[0] || "{}");
+    (agentCdpGlobals()[AGENT_CDP_RECEIVE_NAME] as (payload: string) => void)(
+      JSON.stringify({
+        id: request.id,
+        ok: true,
+        data: {
+          attached: true,
+          liveRequestCount: 4,
+          liveBufferLimit: 200,
+          activeSession: {
+            id: "net_2",
+            name: "checkout",
+            startedAt: 123,
+            preserveAcrossNavigation: true,
+            requestCount: 4,
+          },
+          storedSessionCount: 2,
+        },
+      }),
+    );
+
+    await expect(promise).resolves.toEqual({
+      attached: true,
+      liveRequestCount: 4,
+      liveBufferLimit: 200,
+      activeSession: {
+        id: "net_2",
+        name: "checkout",
+        startedAt: 123,
+        preserveAcrossNavigation: true,
+        requestCount: 4,
+      },
+      storedSessionCount: 2,
+    });
+    expect(request.command).toEqual({ type: "network-status" });
+  });
+
   it("rejects when the runtime bridge is unavailable", async () => {
     vi.useFakeTimers();
     const client = new AgentRuntimeClient();
@@ -101,5 +173,23 @@ describe("AgentRuntimeClient", () => {
     await vi.advanceTimersByTimeAsync(5);
 
     await assertion;
+  });
+
+  it("sends network stop commands", async () => {
+    const sent: string[] = [];
+    agentCdpGlobals()[AGENT_CDP_BINDING_NAME] = (payload: string) => {
+      sent.push(payload);
+    };
+    const client = new AgentRuntimeClient();
+
+    const promise = client.stopNetwork();
+    await Promise.resolve();
+    const request = JSON.parse(sent[0] || "{}");
+    (agentCdpGlobals()[AGENT_CDP_RECEIVE_NAME] as (payload: string) => void)(
+      JSON.stringify({ id: request.id, ok: true, data: "net_2" }),
+    );
+
+    await expect(promise).resolves.toBe("net_2");
+    expect(request.command).toEqual({ type: "network-stop" });
   });
 });
