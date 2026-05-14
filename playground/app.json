@@ -1,16 +1,18 @@
 {
   "expo": {
-    "name": "playground",
-    "slug": "playground",
+    "name": "AgentCDP",
+    "slug": "agent-cdp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "playground",
+    "scheme": "agentcdp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.aitwar.agentcdp"
     },
     "android": {
+      "package": "com.aitwar.agentcdp",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

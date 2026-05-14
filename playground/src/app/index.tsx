@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { runAsyncBurst } from '@/scenarios/profile-async';
+import { runCpuHotspot } from '@/scenarios/profile-cpu';
 
 type RetainedSample = {
   id: string;
@@ -87,20 +88,37 @@ function getTotals() {
   };
 }
 
+function logState(action: string) {
+  const store = getStore();
+  const totals = getTotals();
+  const latestBatch = store.batches.at(-1);
+
+  console.log('[playground]', action, {
+    totals,
+    latestBatchId: latestBatch?.id ?? null,
+    latestBatchSize: latestBatch?.samples.length ?? 0,
+  });
+}
+
+function createInspectionPayload() {
+  return {
+    now: new Date().toISOString(),
+    totals: getTotals(),
+    latestBatch: getStore().batches.at(-1) ?? null,
+  };
+}
+
 function ScenarioButton({
   label,
-  description,
   onPress,
   variant = 'default',
 }: {
   label: string;
-  description: string;
   onPress: () => void;
   variant?: 'default' | 'danger';
 }) {
   return (
     <Pressable
-      accessibilityHint={description}
       accessibilityLabel={label}
       accessibilityRole="button"
       onPress={onPress}
@@ -113,143 +131,86 @@ function ScenarioButton({
       <ThemedText type="smallBold" style={styles.buttonLabel}>
         {label}
       </ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">
-        {description}
-      </ThemedText>
     </Pressable>
   );
 }
 
 export default function HomeScreen() {
-  const [status, setStatus] = useState('Ready for agent-cdp inspection.');
-  const [totals, setTotals] = useState(() => getTotals());
-
-  function syncState(nextStatus: string) {
-    setTotals(getTotals());
-    setStatus(nextStatus);
-  }
-
   function retainSmallBatch() {
     const batch = createRetainedBatch('small', 250);
     getStore().batches.push(batch);
     console.log('[playground] retained small batch', batch.id, batch.samples[0]);
-    syncState(`Retained 250 objects in ${batch.id}.`);
+    logState('retain-small');
   }
 
   function retainLargeBatch() {
     const batch = createRetainedBatch('large', 1200);
     getStore().batches.push(batch);
     console.log('[playground] retained large batch', batch.id, batch.samples.at(-1));
-    syncState(`Retained 1200 objects in ${batch.id}.`);
+    logState('retain-large');
   }
 
   function clearRetainedBatches() {
     getStore().batches = [];
     console.log('[playground] cleared retained batches');
-    syncState('Cleared all retained objects from the global store.');
+    logState('clear');
   }
 
   function createTransientObjects() {
     const checksum = triggerTransientChurn();
     console.log('[playground] transient churn checksum', checksum);
-    syncState(`Created transient objects only. Checksum ${checksum}.`);
+    logState('transient-churn');
+  }
+
+  function emitConsoleBurst() {
+    const payload = createInspectionPayload();
+    console.info('[playground] console info', payload);
+    console.warn('[playground] console warn', {
+      retainedBatches: payload.totals.batchCount,
+      retainedObjects: payload.totals.retainedObjectCount,
+    });
+
+    try {
+      throw new Error('playground handled error');
+    } catch (error) {
+      console.error('[playground] console error', error);
+    }
+
+    logState('console-burst');
+  }
+
+  function runProfileHotspot() {
+    const summary = runCpuHotspot(Date.now());
+    console.log('[playground] cpu hotspot summary', summary);
+    logState('cpu-hotspot');
+  }
+
+  async function runAsyncProfileBurst() {
+    const summary = await runAsyncBurst(Date.now());
+    console.log('[playground] async burst summary', summary);
+    logState('async-burst');
   }
 
   function logSamplePayload() {
-    const payload = {
-      now: new Date().toISOString(),
-      totals: getTotals(),
-      latestBatch: getStore().batches.at(-1) ?? null,
-    };
+    const payload = createInspectionPayload();
 
     console.log('[playground] inspection payload', payload);
-    syncState('Logged the latest payload for runtime inspection.');
+    logState('log-payload');
   }
-
-  const statCards: { label: string; value: string; style?: ViewStyle }[] = [
-    { label: 'Retained batches', value: String(totals.batchCount) },
-    { label: 'Retained objects', value: String(totals.retainedObjectCount) },
-    { label: 'Global handle', value: '__agentCdpPlayground', style: styles.codeCard },
-  ];
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.scrollContent} style={styles.scrollView}>
-          <ThemedView style={styles.heroSection}>
-            <ThemedText type="title" style={styles.title}>
-              agent-cdp
-            </ThemedText>
-            <ThemedText type="subtitle" style={styles.subtitle}>
-              Playground
-            </ThemedText>
-            <ThemedText style={styles.lead} themeColor="textSecondary">
-              Use these controls to create retained memory, transient churn, and structured runtime
-              payloads that agent-cdp should detect over a live device session.
-            </ThemedText>
-          </ThemedView>
-
-          <ThemedView style={styles.statsRow}>
-            {statCards.map((card) => (
-              <ThemedView key={card.label} type="backgroundElement" style={[styles.statCard, card.style]}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {card.label}
-                </ThemedText>
-                <ThemedText type="subtitle" style={styles.statValue}>
-                  {card.value}
-                </ThemedText>
-              </ThemedView>
-            ))}
-          </ThemedView>
-
-          <ThemedView type="backgroundElement" style={styles.stepContainer}>
-            <ThemedText type="smallBold">Scenario actions</ThemedText>
-            <ScenarioButton
-              label="Retain 250 objects"
-              description="Stores a small batch on global state so memory tools can inspect it."
-              onPress={retainSmallBatch}
-            />
-            <ScenarioButton
-              label="Retain 1200 objects"
-              description="Creates a heavier retained batch to make memory deltas obvious."
-              onPress={retainLargeBatch}
-            />
-            <ScenarioButton
-              label="Create transient churn"
-              description="Allocates many objects without retaining them for comparison."
-              onPress={createTransientObjects}
-            />
-            <ScenarioButton
-              label="Log inspection payload"
-              description="Prints the latest retained batch shape to the runtime console."
-              onPress={logSamplePayload}
-            />
-            <ScenarioButton
-              label="Clear retained batches"
-              description="Releases the global store so agent-cdp can confirm cleanup."
-              onPress={clearRetainedBatches}
-              variant="danger"
-            />
-          </ThemedView>
-
-          <ThemedView type="backgroundElement" style={styles.statusCard}>
-            <ThemedText type="smallBold">Latest status</ThemedText>
-            <ThemedText>{status}</ThemedText>
-          </ThemedView>
-
-          <ThemedView type="backgroundElement" style={styles.statusCard}>
-            <ThemedText type="smallBold">Suggested checks</ThemedText>
-            <ThemedText type="small">
-              1. Attach through agent-device, then connect agent-cdp to the running app.
-            </ThemedText>
-            <ThemedText type="small">
-              2. Press a retain button and verify retained object counts rise in memory output.
-            </ThemedText>
-            <ThemedText type="small">
-              3. Press clear and verify the retained store disappears or drops sharply.
-            </ThemedText>
-          </ThemedView>
-        </ScrollView>
+        <ThemedView style={styles.buttonGroup}>
+          <ScenarioButton label="Retain 250 objects" onPress={retainSmallBatch} />
+          <ScenarioButton label="Retain 1200 objects" onPress={retainLargeBatch} />
+          <ScenarioButton label="Create transient churn" onPress={createTransientObjects} />
+          <ScenarioButton label="Emit console burst" onPress={emitConsoleBurst} />
+          <ScenarioButton label="Run CPU hotspot" onPress={runProfileHotspot} />
+          <ScenarioButton label="Run async burst" onPress={runAsyncProfileBurst} />
+          <ScenarioButton label="Log inspection payload" onPress={logSamplePayload} />
+          <ScenarioButton label="Clear retained batches" onPress={clearRetainedBatches} variant="danger" />
+        </ThemedView>
       </SafeAreaView>
     </ThemedView>
   );
@@ -263,66 +224,23 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     width: '100%',
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.four,
   },
-  scrollView: {
-    width: '100%',
-  },
-  scrollContent: {
+  buttonGroup: {
     width: '100%',
     maxWidth: MaxContentWidth,
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.four,
-    paddingBottom: BottomTabInset + Spacing.four,
     gap: Spacing.three,
-  },
-  heroSection: {
-    gap: Spacing.one,
-  },
-  title: {
-    fontSize: 44,
-    lineHeight: 48,
-  },
-  subtitle: {
-    fontSize: 24,
-    lineHeight: 28,
-  },
-  lead: {
-    maxWidth: 640,
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.three,
-  },
-  statCard: {
-    flexGrow: 1,
-    minWidth: 180,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.three,
-    borderRadius: Spacing.four,
-    gap: Spacing.one,
-  },
-  codeCard: {
-    justifyContent: 'space-between',
-  },
-  statValue: {
-    fontSize: 22,
-    lineHeight: 28,
   },
   button: {
     borderRadius: Spacing.three,
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.three,
-    gap: Spacing.one,
+    paddingVertical: 10,
+    minHeight: 40,
     borderWidth: 1,
+    justifyContent: 'center',
   },
   buttonDefault: {
     borderColor: '#3c87f7',
@@ -334,13 +252,7 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   buttonLabel: {
-    fontSize: 16,
-  },
-  statusCard: {
-    gap: Spacing.two,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.three,
-    borderRadius: Spacing.four,
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
