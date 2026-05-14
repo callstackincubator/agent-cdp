@@ -352,48 +352,62 @@ export default function HomeScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           style={styles.scrollView}>
-          <ThemedView style={styles.buttonGroup}>
-            <ScenarioButton label="Retain 250 objects" onPress={retainSmallBatch} />
-            <ScenarioButton label="Retain 1200 objects" onPress={retainLargeBatch} />
-            <ScenarioButton label="Create transient churn" onPress={createTransientObjects} />
-            <ScenarioButton label="Emit console burst" onPress={emitConsoleBurst} />
-            <ScenarioButton label="Run CPU hotspot" onPress={runProfileHotspot} />
-            <ScenarioButton label="Run async burst" onPress={runAsyncProfileBurst} />
-            <ScenarioButton
-              disabled={sdkFlowPending}
-              label={sdkFlowPending ? 'Running SDK CPU profile flow...' : 'Run SDK CPU profile flow'}
-              onPress={() => {
-                void runSdkCpuProfileFlow();
-              }}
-            />
-            <ScenarioButton
-              disabled={sdkFlowPending}
-              label="Refresh SDK profile status"
-              onPress={() => {
-                void refreshSdkCpuProfileStatus();
-              }}
-            />
-            <ScenarioButton label="Run network burst" onPress={runNetworkBurst} />
-            <ScenarioButton label="Log inspection payload" onPress={logSamplePayload} />
-            <ScenarioButton label="Clear retained batches" onPress={clearRetainedBatches} variant="danger" />
+          <ThemedView style={styles.sectionCard} type="backgroundElement">
+            <ThemedText type="smallBold">CLI Testing</ThemedText>
+            <ThemedText style={styles.sectionHelp} themeColor="textSecondary" type="small">
+              Use these fake actions to exercise agent-cdp CLI inspection, profiling, memory, console, and network workflows.
+            </ThemedText>
+            <ThemedView style={styles.buttonGroup}>
+              <ScenarioButton label="Retain 250 objects" onPress={retainSmallBatch} />
+              <ScenarioButton label="Retain 1200 objects" onPress={retainLargeBatch} />
+              <ScenarioButton label="Create transient churn" onPress={createTransientObjects} />
+              <ScenarioButton label="Emit console burst" onPress={emitConsoleBurst} />
+              <ScenarioButton label="Run CPU hotspot" onPress={runProfileHotspot} />
+              <ScenarioButton label="Run async burst" onPress={runAsyncProfileBurst} />
+              <ScenarioButton label="Run network burst" onPress={runNetworkBurst} />
+              <ScenarioButton label="Log inspection payload" onPress={logSamplePayload} />
+              <ScenarioButton label="Clear retained batches" onPress={clearRetainedBatches} variant="danger" />
+            </ThemedView>
           </ThemedView>
-          <ThemedView style={styles.statusCard} type="backgroundElement">
-            <ThemedText type="smallBold">SDK CPU Profile E2E</ThemedText>
-            <ThemedText style={styles.statusHelp} themeColor="textSecondary" type="small">
-              Use this after selecting the Expo target with the daemon. The flow starts profiling, runs a deterministic JS workload, then stops and reports the session.
+          <ThemedView style={styles.sectionCard} type="backgroundElement">
+            <ThemedText type="smallBold">SDK Testing</ThemedText>
+            <ThemedText style={styles.sectionHelp} themeColor="textSecondary" type="small">
+              Use these controls after selecting the Expo target with the daemon to validate the runtime SDK bridge.
             </ThemedText>
-            <ThemedText type="small">Active: {sdkStatus ? (sdkStatus.active ? 'yes' : 'no') : 'unknown'}</ThemedText>
-            <ThemedText type="small">Sessions recorded: {sdkStatus?.sessionCount ?? 'unknown'}</ThemedText>
-            <ThemedText type="small">Elapsed ms: {sdkStatus?.elapsedMs ?? 'unknown'}</ThemedText>
-            <ThemedText type="small">Active name: {sdkStatus?.activeName ?? 'none'}</ThemedText>
-            <ThemedText style={sdkFlowError ? styles.statusError : styles.statusMessage} type="small">
-              {sdkFlowMessage}
-            </ThemedText>
-            {lastSdkProfileSessionId ? (
-              <ThemedText selectable style={styles.sessionId} type="code">
-                Last session ID: {lastSdkProfileSessionId}
+            <ThemedView style={styles.buttonGroup}>
+              <ScenarioButton
+                disabled={sdkFlowPending}
+                label={sdkFlowPending ? 'Running SDK CPU profile flow...' : 'Run SDK CPU profile flow'}
+                onPress={() => {
+                  void runSdkCpuProfileFlow();
+                }}
+              />
+              <ScenarioButton
+                disabled={sdkFlowPending}
+                label="Refresh SDK profile status"
+                onPress={() => {
+                  void refreshSdkCpuProfileStatus();
+                }}
+              />
+            </ThemedView>
+            <ThemedView style={styles.statusCard}>
+              <ThemedText type="smallBold">SDK CPU Profile E2E</ThemedText>
+              <ThemedText style={styles.statusHelp} themeColor="textSecondary" type="small">
+                The flow starts profiling, runs a deterministic JS workload, then stops and reports the session.
               </ThemedText>
-            ) : null}
+              <ThemedText type="small">Active: {sdkStatus ? (sdkStatus.active ? 'yes' : 'no') : 'unknown'}</ThemedText>
+              <ThemedText type="small">Sessions recorded: {sdkStatus?.sessionCount ?? 'unknown'}</ThemedText>
+              <ThemedText type="small">Elapsed ms: {sdkStatus?.elapsedMs ?? 'unknown'}</ThemedText>
+              <ThemedText type="small">Active name: {sdkStatus?.activeName ?? 'none'}</ThemedText>
+              <ThemedText style={sdkFlowError ? styles.statusError : styles.statusMessage} type="small">
+                {sdkFlowMessage}
+              </ThemedText>
+              {lastSdkProfileSessionId ? (
+                <ThemedText selectable style={styles.sessionId} type="code">
+                  Last session ID: {lastSdkProfileSessionId}
+                </ThemedText>
+              ) : null}
+            </ThemedView>
           </ThemedView>
         </ScrollView>
       </SafeAreaView>
@@ -419,18 +433,22 @@ const styles = StyleSheet.create({
   scrollContent: {
     alignItems: 'center',
     paddingBottom: Spacing.four,
+    gap: Spacing.three,
+  },
+  sectionCard: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    borderRadius: Spacing.three,
+    padding: Spacing.three,
+    gap: Spacing.three,
   },
   buttonGroup: {
     width: '100%',
-    maxWidth: MaxContentWidth,
     gap: Spacing.three,
   },
   statusCard: {
     width: '100%',
-    maxWidth: MaxContentWidth,
-    marginTop: Spacing.three,
     borderRadius: Spacing.three,
-    padding: Spacing.three,
     gap: Spacing.one,
   },
   button: {
@@ -459,6 +477,9 @@ const styles = StyleSheet.create({
   },
   statusHelp: {
     marginBottom: Spacing.one,
+  },
+  sectionHelp: {
+    marginTop: -Spacing.one,
   },
   statusMessage: {
     marginTop: Spacing.one,
