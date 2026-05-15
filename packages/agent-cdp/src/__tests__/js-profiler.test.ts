@@ -1,5 +1,6 @@
-import { formatJsHotspotDetail } from "../js-profiler/formatters.js";
-import { queryHotspotDetail, queryHotspots } from "../js-profiler/query.js";
+import { formatJsHotspotDetail, formatJsSessionList } from "../js-profiler/formatters.js";
+import { normalizeProfile } from "../js-profiler/normalize.js";
+import { queryHotspotDetail, queryHotspots, querySessions } from "../js-profiler/query.js";
 import type { CdpProfile, JsProfileSession } from "../js-profiler/types.js";
 
 function createSession(): JsProfileSession {
@@ -118,5 +119,33 @@ describe("js profiler queries", () => {
     expect(output).toContain("Top callers:");
     expect(output).toContain("Top callees:");
     expect(output).toContain("1–2ms (1 samples, 33.3% of hotspot self time)");
+  });
+
+  it("uses the real capture window for listed session duration when raw profile timestamps are cumulative", () => {
+    const session = normalizeProfile(
+      {
+        startTime: 688773992732,
+        endTime: 689336975523,
+        nodes: [
+          { id: 1, callFrame: { functionName: "[root]", scriptId: "0", url: "[root]", lineNumber: 0, columnNumber: 0 }, children: [2] },
+          { id: 2, callFrame: { functionName: "work", scriptId: "1", url: "app:///work.ts", lineNumber: 0, columnNumber: 0 } },
+        ],
+        samples: [1, 2, 2, 2],
+        timeDeltas: [0, 562950302, 20986, 11501],
+      } satisfies CdpProfile,
+      {
+        sessionId: "js_2",
+        name: "playground-sdk",
+        startedAt: 1_747_302_762_405,
+        stoppedAt: 1_747_303_324_051,
+        samplingIntervalUs: undefined,
+      },
+    );
+
+    expect(session.durationMs).toBe(561646);
+    expect(session.sampleTimestampsMs.at(-1)).toBeCloseTo(561646, 3);
+
+    const output = formatJsSessionList(querySessions([session], 20, 0));
+    expect(output).toContain("js_2  playground-sdk  561.65s  4 samples");
   });
 });

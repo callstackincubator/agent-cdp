@@ -42,7 +42,12 @@ export function normalizeProfile(
   const profile = rawProfile as CdpProfile;
   const { nodes, samples = [], timeDeltas = [], startTime, endTime } = profile;
 
-  const durationMs = (endTime - startTime) / 1000;
+  const rawDurationMs = Math.max(0, (endTime - startTime) / 1000);
+  const captureDurationMs = Math.max(0, meta.stoppedAt - meta.startedAt);
+  const durationMs = captureDurationMs > 0 ? captureDurationMs : rawDurationMs;
+  const rawSampleDeltasMs = timeDeltas.map((delta) => Math.max(0, delta / 1000));
+  const totalRawSampleMs = rawSampleDeltasMs.reduce((sum, delta) => sum + delta, 0);
+  const sampleTimeScale = totalRawSampleMs > 0 && durationMs > 0 ? durationMs / totalRawSampleMs : 1;
 
   const nodeById = new Map<number, CdpProfile["nodes"][0]>();
   for (const node of nodes) nodeById.set(node.id, node);
@@ -54,10 +59,10 @@ export function normalizeProfile(
 
   // Per-sample timestamps relative to recording start (ms)
   const sampleTimestampsMs: number[] = [];
-  let cumulativeUs = 0;
+  let cumulativeMs = 0;
   for (let i = 0; i < samples.length; i++) {
-    cumulativeUs += timeDeltas[i] ?? 0;
-    sampleTimestampsMs.push(cumulativeUs / 1000);
+    cumulativeMs += rawSampleDeltasMs[i] ?? 0;
+    sampleTimestampsMs.push(cumulativeMs * sampleTimeScale);
   }
 
   const timePerSampleMs = samples.length > 0 ? durationMs / samples.length : 0;
@@ -258,7 +263,7 @@ export function normalizeProfile(
     if (frameIds.length === 0) continue;
 
     const sigKey = frameIds.join(">>>");
-    const timeDelta = (timeDeltas[i] ?? 0) / 1000;
+    const timeDelta = (rawSampleDeltasMs[i] ?? 0) * sampleTimeScale;
     const existing = sigByKey.get(sigKey);
     if (existing) {
       existing.count++;
