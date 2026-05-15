@@ -29,6 +29,18 @@ jobs:
       version: ${{ steps.bump-version.outputs.version }}
       commit-sha: ${{ steps.commit-release.outputs.commit-sha }}
     steps:
+      - name: Verify release branch
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          if [ "$RELEASE_BRANCH" != "$DEFAULT_BRANCH" ]; then
+            printf 'Release workflow must run from default branch %s, got %s\n' "$DEFAULT_BRANCH" "$RELEASE_BRANCH" >&2
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
