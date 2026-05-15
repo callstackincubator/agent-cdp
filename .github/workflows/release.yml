@@ -27,6 +27,7 @@ jobs:
       contents: write
     outputs:
       version: ${{ steps.bump-version.outputs.version }}
+      commit-sha: ${{ steps.commit-release.outputs.commit-sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -113,6 +114,7 @@ jobs:
         run: pnpm run build
 
       - name: Commit and tag release
+        id: commit-release
         env:
           RELEASE_VERSION: ${{ steps.bump-version.outputs.version }}
           RELEASE_BRANCH: ${{ github.ref_name }}
@@ -124,6 +126,7 @@ jobs:
           git add packages/*/package.json
           git commit -m "release: v${RELEASE_VERSION}"
           git tag "v${RELEASE_VERSION}"
+          printf 'commit-sha=%s\n' "$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
           git push origin "HEAD:${RELEASE_BRANCH}"
           git push origin "v${RELEASE_VERSION}"
 
@@ -135,10 +138,25 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - name: Checkout release tag
+      - name: Checkout release commit
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          ref: v${{ needs.prepare.outputs.version }}
+          ref: ${{ needs.prepare.outputs.commit-sha }}
+          persist-credentials: false
+
+      - name: Verify release tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          RELEASE_COMMIT_SHA: ${{ needs.prepare.outputs.commit-sha }}
+        run: |
+          set -euo pipefail
+
+          tag_commit_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/v${RELEASE_VERSION}" --jq '.object.sha')
+          if [ "$tag_commit_sha" != "$RELEASE_COMMIT_SHA" ]; then
+            printf 'Release tag v%s points to %s, expected %s\n' "$RELEASE_VERSION" "$tag_commit_sha" "$RELEASE_COMMIT_SHA" >&2
+            exit 1
+          fi
 
       - name: Setup pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
