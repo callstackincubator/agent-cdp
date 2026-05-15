@@ -33,6 +33,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@agent-cdp/protocol": "workspace:*",
     "@jridgewell/trace-mapping": "^0.3.31",
     "commander": "^14.0.3",
     "ws": "^8.18.3"

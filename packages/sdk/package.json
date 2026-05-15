@@ -1,0 +1,31 @@
+{
+  "name": "@agent-cdp/sdk",
+  "version": "1.4.0",
+  "description": "Programmatic SDK for agent-cdp runtime integrations.",
+  "type": "module",
+  "types": "./src/index.ts",
+  "react-native": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "react-native": "./src/index.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agent-cdp/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.4"
+  }
+}

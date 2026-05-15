@@ -1,0 +1,26 @@
+{
+  "name": "@agent-cdp/protocol",
+  "version": "1.4.0",
+  "description": "Shared protocol types for agent-cdp daemon, CLI, and SDK integrations.",
+  "type": "module",
+  "types": "./src/index.ts",
+  "react-native": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "react-native": "./src/index.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3"
+  }
+}

@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "agent-cdp": "node packages/agent-cdp/dist/bin.js",
-    "build": "pnpm --filter agent-cdp build",
+    "build": "pnpm -r --filter './packages/*' build",
     "lint": "pnpm --filter agent-cdp lint",
     "format": "pnpm --filter agent-cdp format",
     "format:check": "pnpm --filter agent-cdp format:check",
@@ -17,6 +17,7 @@
     "typecheck": "pnpm --filter agent-cdp typecheck"
   },
   "devDependencies": {
+    "@types/node": "^22.15.29",
     "simple-git-hooks": "^2.11.1"
   },
   "simple-git-hooks": {

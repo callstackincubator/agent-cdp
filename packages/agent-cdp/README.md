@@ -110,6 +110,8 @@ agent-cdp stop
 
 Commands are grouped as **daemon**, **target**, **console**, **runtime**, **network**, **trace**, **memory** (`snapshot`, `usage`, `allocation`, `allocation-timeline`), **profile** (`cpu`), and **skills** (bundled reference files). See `agent-cdp --help` for exact syntax and options.
 
+For the runtime SDK bridge and in-app profiling, see `docs/SDK.md`.
+
 ## Runtime inspection
 
 Use `runtime` for live state inspection when you need more than captured console output.
