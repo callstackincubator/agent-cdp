@@ -1,11 +1,21 @@
 import { SessionManager } from "../session-manager.js";
-import type { CdpEventMessage, CdpTransport, TargetDescriptor, TargetProvider } from "../types.js";
+import type { CdpEventMessage, CdpTransport, TargetProvider } from "../types.js";
 
 const CHROME_TEST_ID = "chrome:ZXhhbXBsZS50ZXN0:page-1";
 const REACT_NATIVE_TEST_ID = "react-native:ZXhhbXBsZS50ZXN0:page-1";
 
 class FakeTransport implements CdpTransport {
   connected = false;
+  calibrationResult: unknown = {
+    result: {
+      value: {
+        monotonic: 123.45,
+        timeOrigin: 1_700_000_000_000,
+        wall: 1_700_000_000_123.45,
+      },
+    },
+  };
+  readonly sentMethods: string[] = [];
 
   connect(): Promise<void> {
     this.connected = true;
@@ -21,7 +31,11 @@ class FakeTransport implements CdpTransport {
     return this.connected;
   }
 
-  send(): Promise<unknown> {
+  send(method: string): Promise<unknown> {
+    this.sentMethods.push(method);
+    if (method === "Runtime.evaluate") {
+      return Promise.resolve(this.calibrationResult);
+    }
     return Promise.resolve(undefined);
   }
 
@@ -32,9 +46,12 @@ class FakeTransport implements CdpTransport {
 
 class FakeProvider implements TargetProvider {
   readonly kind = "chrome" as const;
+  readonly transports: FakeTransport[] = [];
 
   createTransport(): CdpTransport {
-    return new FakeTransport();
+    const transport = new FakeTransport();
+    this.transports.push(transport);
+    return transport;
   }
 }
 
@@ -72,9 +89,50 @@ describe("SessionManager", () => {
       title: "Example",
     });
     expect(manager.getSessionState()).toBe("connected");
+    expect(manager.getSession()?.metadata.clockCalibration).toMatchObject({
+      state: "calibrated",
+      targetMonotonicTimeMs: 123.45,
+      targetTimeOriginMs: 1_700_000_000_000,
+      targetWallTimeMs: 1_700_000_000_123.45,
+    });
     await manager.clearTarget();
     expect(manager.getSelectedTarget()).toBeNull();
     expect(manager.getSessionState()).toBe("disconnected");
+  });
+
+  it("records explicit unavailable calibration when the target runtime cannot provide one", async () => {
+    const targets = [
+      {
+        id: CHROME_TEST_ID,
+        rawId: "page-1",
+        title: "Example",
+        kind: "chrome" as const,
+        description: "Test page",
+        webSocketDebuggerUrl: "ws://example.test/devtools/page/1",
+        sourceUrl: "http://example.test",
+      },
+    ];
+    const provider = new FakeProvider();
+    const manager = new SessionManager([provider], () => Promise.resolve(targets));
+    provider.createTransport = () => {
+      const transport = new FakeTransport();
+      transport.calibrationResult = {
+        result: {
+          value: {
+            monotonic: null,
+          },
+        },
+      };
+      provider.transports.push(transport);
+      return transport;
+    };
+
+    await manager.selectTarget(CHROME_TEST_ID, {});
+
+    expect(manager.getSession()?.metadata.clockCalibration).toMatchObject({
+      state: "unavailable",
+      reason: "Target runtime did not provide performance.now()",
+    });
   });
 
   it("rejects mismatched explicit urls when selecting a target", async () => {
@@ -99,32 +157,20 @@ describe("SessionManager", () => {
   it("reconnects react native targets by logical device id", async () => {
     class FakeReactNativeProvider implements TargetProvider {
       readonly kind = "react-native" as const;
-      private attempt = 0;
-
-      async listTargets(): Promise<TargetDescriptor[]> {
-        this.attempt += 1;
-        return [
-          {
-            id: `react-native:ZXhhbXBsZS50ZXN0:page-${this.attempt}`,
-            rawId: `page-${this.attempt}`,
-            title: "React Native Experimental",
-            kind: "react-native",
-            description: "RN target",
-            appId: "com.example.app",
-            webSocketDebuggerUrl: `ws://example.test/inspector/debug?page=${this.attempt}`,
-            sourceUrl: "http://example.test",
-            reactNative: {
-              logicalDeviceId: "device-1",
-              capabilities: {
-                nativePageReloads: true,
-              },
-            },
-          },
-        ];
-      }
+      private transportAttempt = 0;
 
       createTransport(): CdpTransport {
-        return new FakeTransport();
+        this.transportAttempt += 1;
+        const transport = new FakeTransport();
+        transport.calibrationResult = {
+          result: {
+            value: {
+              monotonic: this.transportAttempt * 100,
+              timeOrigin: 1_700_000_000_000,
+            },
+          },
+        };
+        return transport;
       }
     }
 
@@ -166,5 +212,10 @@ describe("SessionManager", () => {
       rawId: "page-2",
     });
     expect(manager.getSessionState()).toBe("connected");
+    expect(manager.getSession()?.metadata.clockCalibration).toMatchObject({
+      state: "calibrated",
+      targetMonotonicTimeMs: 200,
+      targetWallTimeMs: 1_700_000_000_200,
+    });
   });
 });

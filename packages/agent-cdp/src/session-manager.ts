@@ -2,20 +2,56 @@ import type {
   CdpTransport,
   DiscoveryOptions,
   RuntimeSession,
+  RuntimeSessionMetadata,
   SessionState,
   TargetDescriptor,
+  TargetSessionClockCalibration,
   TargetProvider,
 } from "./types.js";
 import { discoverTargets, normalizeDiscoveryUrl, parseTargetId } from "./discovery.js";
 
+interface RuntimeEvaluateResponse {
+  result?: {
+    value?: {
+      monotonic?: unknown;
+      timeOrigin?: unknown;
+      wall?: unknown;
+    };
+  };
+  exceptionDetails?: {
+    text?: string;
+    exception?: {
+      description?: string;
+    };
+  };
+}
+
+const CLOCK_CALIBRATION_EXPRESSION = `(() => {
+  const perf = globalThis.performance;
+  const monotonic = typeof perf?.now === "function" ? perf.now() : null;
+  const timeOrigin = typeof perf?.timeOrigin === "number" ? perf.timeOrigin : null;
+  const wall = typeof Date.now === "function" ? Date.now() : null;
+  return { monotonic, timeOrigin, wall };
+})()`;
+
 export class PersistentRuntimeSession implements RuntimeSession {
+  metadata: RuntimeSessionMetadata = {
+    connectedAt: 0,
+    clockCalibration: createUnavailableCalibration(0, 0, "Session has not connected yet"),
+  };
+
   constructor(
     readonly target: TargetDescriptor,
     readonly transport: CdpTransport,
   ) {}
 
-  ensureConnected(): Promise<void> {
-    return this.transport.connect();
+  async ensureConnected(): Promise<void> {
+    await this.transport.connect();
+    const clockCalibration = await calibrateTargetSessionClock(this.transport);
+    this.metadata = {
+      connectedAt: clockCalibration.hostResponseTimeMs,
+      clockCalibration,
+    };
   }
 
   close(): Promise<void> {
@@ -166,4 +202,81 @@ export class SessionManager {
 
     return { url: normalizedOptionUrl };
   }
+}
+
+function createUnavailableCalibration(
+  hostRequestTimeMs: number,
+  hostResponseTimeMs: number,
+  reason: string,
+): TargetSessionClockCalibration {
+  const hostMidpointTimeMs = Math.round((hostRequestTimeMs + hostResponseTimeMs) / 2);
+  return {
+    state: "unavailable",
+    hostRequestTimeMs,
+    hostResponseTimeMs,
+    hostMidpointTimeMs,
+    roundTripTimeMs: Math.max(0, hostResponseTimeMs - hostRequestTimeMs),
+    reason,
+  };
+}
+
+async function calibrateTargetSessionClock(transport: CdpTransport): Promise<TargetSessionClockCalibration> {
+  const hostRequestTimeMs = Date.now();
+
+  try {
+    const response = (await transport.send("Runtime.evaluate", {
+      expression: CLOCK_CALIBRATION_EXPRESSION,
+      returnByValue: true,
+      silent: true,
+    })) as RuntimeEvaluateResponse;
+    const hostResponseTimeMs = Date.now();
+
+    if (response.exceptionDetails) {
+      return createUnavailableCalibration(
+        hostRequestTimeMs,
+        hostResponseTimeMs,
+        response.exceptionDetails.exception?.description || response.exceptionDetails.text || "Runtime evaluation failed",
+      );
+    }
+
+    const value = response.result?.value;
+    const targetMonotonicTimeMs = readFiniteNumber(value?.monotonic);
+    if (targetMonotonicTimeMs === null) {
+      return createUnavailableCalibration(
+        hostRequestTimeMs,
+        hostResponseTimeMs,
+        "Target runtime did not provide performance.now()",
+      );
+    }
+
+    const targetTimeOriginMs = readFiniteNumber(value?.timeOrigin);
+    const targetWallTimeMs = readFiniteNumber(value?.wall) ?? deriveTargetWallTime(targetTimeOriginMs, targetMonotonicTimeMs);
+    const hostMidpointTimeMs = Math.round((hostRequestTimeMs + hostResponseTimeMs) / 2);
+
+    return {
+      state: "calibrated",
+      hostRequestTimeMs,
+      hostResponseTimeMs,
+      hostMidpointTimeMs,
+      roundTripTimeMs: Math.max(0, hostResponseTimeMs - hostRequestTimeMs),
+      targetMonotonicTimeMs,
+      targetTimeOriginMs: targetTimeOriginMs ?? undefined,
+      targetWallTimeMs: targetWallTimeMs ?? undefined,
+    };
+  } catch (error) {
+    const hostResponseTimeMs = Date.now();
+    return createUnavailableCalibration(
+      hostRequestTimeMs,
+      hostResponseTimeMs,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+function deriveTargetWallTime(targetTimeOriginMs: number | null, targetMonotonicTimeMs: number): number | null {
+  return targetTimeOriginMs === null ? null : targetTimeOriginMs + targetMonotonicTimeMs;
+}
+
+function readFiniteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }

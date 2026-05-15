@@ -44,6 +44,17 @@ function createTraceSession(transport: CdpTransport): RuntimeSession {
       sourceUrl: "http://example.test",
     } satisfies TargetDescriptor,
     transport,
+    metadata: {
+      connectedAt: 0,
+      clockCalibration: {
+        state: "unavailable",
+        hostRequestTimeMs: 0,
+        hostResponseTimeMs: 0,
+        hostMidpointTimeMs: 0,
+        roundTripTimeMs: 0,
+        reason: "not needed in test",
+      },
+    },
     ensureConnected: () => Promise.resolve(),
     close: () => Promise.resolve(),
   };
