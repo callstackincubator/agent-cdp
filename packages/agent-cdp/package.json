@@ -1,6 +1,6 @@
 {
   "name": "agent-cdp",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Command-line tool for the Chrome DevTools Protocol (CDP): debug targets, console, traces, heap snapshots, and JavaScript CPU profiling for Chrome, Node.js, and React Native.",
   "type": "module",
   "repository": {
