@@ -37,8 +37,11 @@ Available calls:
 - `cpuProfile.start({ name?, samplingIntervalUs? })`
 - `cpuProfile.status()`
 - `cpuProfile.stop()`
+- `isConnected()`
 
 `cpuProfile.status()` returns whether a profile is active plus the active name, elapsed time, and retained session count. `cpuProfile.stop()` returns the recorded session ID.
+
+`isConnected()` returns `true` when the runtime bridge has been injected into the app, which means `agent-cdp` is currently attached to the selected target. Use it when you want a cheap connectivity check before attempting a profiling or capture command.
 
 ## Workflow
 

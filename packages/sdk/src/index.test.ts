@@ -32,6 +32,22 @@ describe("AgentRuntimeClient", () => {
     expect(request.command).toEqual({ type: "js-profile-stop" });
   });
 
+  it("reports whether the runtime bridge is installed", async () => {
+    const client = new AgentRuntimeClient();
+    expect(client.isConnected()).toBe(false);
+
+    agentCdpGlobals()[AGENT_CDP_BINDING_NAME] = () => undefined;
+    expect(client.isConnected()).toBe(true);
+
+    vi.resetModules();
+    const sdk = await import("./index.js");
+    expect(sdk.isConnected()).toBe(true);
+
+    delete agentCdpGlobals()[AGENT_CDP_BINDING_NAME];
+    expect(client.isConnected()).toBe(false);
+    expect(sdk.isConnected()).toBe(false);
+  });
+
   it("sends trace commands and resolves typed bridge responses", async () => {
     const sent: string[] = [];
     agentCdpGlobals()[AGENT_CDP_BINDING_NAME] = (payload: string) => {
