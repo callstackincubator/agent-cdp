@@ -63,6 +63,10 @@ export class AgentRuntimeClient {
     this.installReceiver();
   }
 
+  isConnected(): boolean {
+    return this.getBinding() !== null;
+  }
+
   startCpuProfile(options: { name?: string; samplingIntervalUs?: number } = {}): Promise<string> {
     return this.send({
       type: "js-profile-start",
@@ -186,9 +190,9 @@ export class AgentRuntimeClient {
     const startedAt = Date.now();
 
     while (Date.now() - startedAt <= this.timeoutMs) {
-      const binding = agentCdpGlobals()[this.bindingName];
-      if (typeof binding === "function") {
-        return binding as (payload: string) => void;
+      const binding = this.getBinding();
+      if (binding) {
+        return binding;
       }
 
       await sleep(BINDING_POLL_INTERVAL_MS);
@@ -201,6 +205,11 @@ export class AgentRuntimeClient {
     agentCdpGlobals()[this.receiveName] = (payload: string) => {
       this.receive(payload);
     };
+  }
+
+  private getBinding(): ((payload: string) => void) | null {
+    const binding = agentCdpGlobals()[this.bindingName];
+    return typeof binding === "function" ? (binding as (payload: string) => void) : null;
   }
 
   private receive(payload: string): void {
@@ -227,6 +236,10 @@ export class AgentRuntimeClient {
 }
 
 const defaultClient = new AgentRuntimeClient();
+
+export function isConnected(): boolean {
+  return defaultClient.isConnected();
+}
 
 export const cpuProfile = {
   start: (options?: { name?: string; samplingIntervalUs?: number }) => defaultClient.startCpuProfile(options),
