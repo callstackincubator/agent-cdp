@@ -17,6 +17,7 @@
     "typecheck": "pnpm --filter agent-cdp typecheck"
   },
   "devDependencies": {
+    "@types/node": "^22.15.29",
     "simple-git-hooks": "^2.11.1"
   },
   "simple-git-hooks": {

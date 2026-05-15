@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@types/node':
+        specifier: ^22.15.29
+        version: 22.19.17
       simple-git-hooks:
         specifier: ^2.11.1
         version: 2.13.1
