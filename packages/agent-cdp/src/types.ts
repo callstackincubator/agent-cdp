@@ -40,9 +40,37 @@ export interface CdpTransport {
   onEvent(listener: (message: CdpEventMessage) => void): () => void;
 }
 
+export interface CalibratedTargetSessionClock {
+  readonly state: "calibrated";
+  readonly hostRequestTimeMs: number;
+  readonly hostResponseTimeMs: number;
+  readonly hostMidpointTimeMs: number;
+  readonly roundTripTimeMs: number;
+  readonly targetMonotonicTimeMs: number;
+  readonly targetTimeOriginMs?: number;
+  readonly targetWallTimeMs?: number;
+}
+
+export interface UnavailableTargetSessionClock {
+  readonly state: "unavailable";
+  readonly hostRequestTimeMs: number;
+  readonly hostResponseTimeMs: number;
+  readonly hostMidpointTimeMs: number;
+  readonly roundTripTimeMs: number;
+  readonly reason: string;
+}
+
+export type TargetSessionClockCalibration = CalibratedTargetSessionClock | UnavailableTargetSessionClock;
+
+export interface RuntimeSessionMetadata {
+  readonly connectedAt: number;
+  readonly clockCalibration: TargetSessionClockCalibration;
+}
+
 export interface RuntimeSession {
   readonly target: TargetDescriptor;
   readonly transport: CdpTransport;
+  readonly metadata: RuntimeSessionMetadata;
   ensureConnected(): Promise<void>;
   close(): Promise<void>;
 }
@@ -80,6 +108,7 @@ export interface StatusInfo {
   providerCount: number;
   sessionState: SessionState;
   tracingActive: boolean;
+  sessionDetails?: RuntimeSessionMetadata | null;
 }
 
 export type IpcCommand =

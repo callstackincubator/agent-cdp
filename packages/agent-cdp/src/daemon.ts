@@ -691,6 +691,7 @@ class Daemon {
         providerCount: this.providers.length,
         sessionState: this.sessionManager.getSessionState(),
         tracingActive: this.traceManager.isActive(),
+        sessionDetails: this.sessionManager.getSession()?.metadata ?? null,
       };
 
       return { ok: true, data: status };

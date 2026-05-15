@@ -14,6 +14,14 @@ export function formatStatus(info: StatusInfo, verbose = false): string {
     } else {
       lines.push("Target: none selected");
     }
+    if (info.sessionDetails) {
+      lines.push(`Connected at: ${new Date(info.sessionDetails.connectedAt).toISOString()}`);
+      lines.push(
+        info.sessionDetails.clockCalibration.state === "calibrated"
+          ? `Session clock: calibrated target=${Math.round(info.sessionDetails.clockCalibration.targetMonotonicTimeMs)}ms rtt=${Math.round(info.sessionDetails.clockCalibration.roundTripTimeMs)}ms`
+          : `Session clock: unavailable (${info.sessionDetails.clockCalibration.reason})`,
+      );
+    }
     return lines.join("\n");
   }
 
