@@ -1,4 +1,4 @@
-oh # AGENTS.md
+# AGENTS.md
 
 Minimal operating guide for AI coding agents in this repo.
 
