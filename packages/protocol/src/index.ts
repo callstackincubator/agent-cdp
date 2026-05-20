@@ -171,7 +171,8 @@ export type IpcCommand =
   | { type: "js-memory-summary" }
   | { type: "js-memory-diff"; baseSampleId: string; compareSampleId: string }
   | { type: "js-memory-trend"; limit?: number }
-  | { type: "js-memory-leak-signal"; sinceSampleId?: string };
+  | { type: "js-memory-leak-signal"; sinceSampleId?: string }
+  | { type: "plugin-command"; pluginId: string; command: string; input?: unknown };
 
 export type IpcResponse =
   | { ok: true; data: unknown }
