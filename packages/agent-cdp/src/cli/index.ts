@@ -5,11 +5,13 @@ import { usage } from "./help.js";
 import type { AgentPluginRegistration } from "./program.js";
 import { createProgram } from "./program.js";
 import { registerCliCommands as registerRuntimeBridgeCliCommands } from "../plugins/runtime-bridge/index.js";
+import { registerRozeniteCliCommands } from "../plugins/rozenite/cli.js";
 
 export { ensureTargetSelected, MULTIPLE_TARGETS_AVAILABLE_MESSAGE, usage };
 
 const BUILT_IN_PLUGINS: AgentPluginRegistration[] = [
   { registerCliCommands: registerRuntimeBridgeCliCommands },
+  { registerCliCommands: registerRozeniteCliCommands },
 ];
 
 function shouldPrintHelp(argv: string[]): boolean {
