@@ -7,7 +7,6 @@ import {
   getConnectionErrorMessage,
   shouldReattachConsoleCollector,
 } from "./command-dispatcher.js";
-import { AgentRuntimeBridge } from "./bridge/runtime-bridge.js";
 import { ConsoleCollector } from "./console.js";
 import { HeapSnapshotManager } from "./heap-snapshot/index.js";
 import { JsAllocationProfiler } from "./js-allocation/index.js";
@@ -15,6 +14,8 @@ import { JsAllocationTimelineProfiler } from "./js-allocation-timeline/index.js"
 import { JsHeapUsageMonitor } from "./js-memory/index.js";
 import { JsProfiler } from "./js-profiler/index.js";
 import { NetworkManager } from "./network/index.js";
+import { PluginOrchestrator } from "./plugin-orchestrator.js";
+import { AgentRuntimeBridgePlugin } from "./plugins/runtime-bridge/index.js";
 import { createTargetProviders } from "./providers.js";
 import { RuntimeManager } from "./runtime/index.js";
 import { SessionManager } from "./session-manager.js";
@@ -46,10 +47,13 @@ class Daemon {
   private readonly traceManager = new TraceManager();
   private readonly jsProfiler = new JsProfiler();
   private readonly commandDispatcher: AgentCdpCommandDispatcher;
-  private readonly runtimeBridge: AgentRuntimeBridge;
+  private readonly orchestrator: PluginOrchestrator;
   private ipcServer: net.Server | null = null;
 
   constructor() {
+    const bridgePlugin = new AgentRuntimeBridgePlugin((cmd) => this.commandDispatcher.dispatch(cmd));
+    this.orchestrator = new PluginOrchestrator([bridgePlugin]);
+
     this.commandDispatcher = new AgentCdpCommandDispatcher({
       startedAt: this.startedAt,
       providers: this.providers,
@@ -63,11 +67,16 @@ class Daemon {
       runtimeManager: this.runtimeManager,
       traceManager: this.traceManager,
       jsProfiler: this.jsProfiler,
-      beforeClearTarget: () => this.runtimeBridge.detach(),
-      afterTargetSelected: (session) => this.runtimeBridge.attach(session),
-      afterTargetReconnected: (session) => this.runtimeBridge.attach(session),
+      beforeClearTarget: () => {
+        void this.orchestrator.onTargetCleared();
+      },
+      afterTargetSelected: async (session) => {
+        await this.orchestrator.onTargetSelected(session);
+      },
+      afterTargetReconnected: async (session) => {
+        await this.orchestrator.onTargetReconnected(session);
+      },
     });
-    this.runtimeBridge = new AgentRuntimeBridge(this.commandDispatcher);
   }
 
   async start(): Promise<void> {
@@ -81,6 +90,7 @@ class Daemon {
     }
 
     await this.startIpc(socketPath);
+    await this.orchestrator.start();
 
     let buildMtime: number | undefined;
     try {
@@ -98,10 +108,10 @@ class Daemon {
     fs.writeFileSync(getDaemonInfoPath(), JSON.stringify(info, null, 2));
 
     const shutdown = () => {
-      void this.sessionManager.clearTarget().finally(() => {
+      void this.sessionManager.clearTarget().finally(async () => {
         this.consoleCollector.detach();
         this.networkManager.detach();
-        this.runtimeBridge.detach();
+        await this.orchestrator.stop();
         this.stop();
         process.exit(0);
       });
@@ -139,7 +149,11 @@ class Daemon {
 
           try {
             const command = JSON.parse(line) as IpcCommand;
-            void this.commandDispatcher.dispatch(command).then((response) => {
+            const responsePromise =
+              command.type === "plugin-command"
+                ? this.orchestrator.dispatch(command.pluginId, command.command, command.input)
+                : this.commandDispatcher.dispatch(command);
+            void responsePromise.then((response) => {
               if (!connection.destroyed) {
                 connection.write(JSON.stringify(response) + "\n");
               }
