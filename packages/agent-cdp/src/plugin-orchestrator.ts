@@ -68,15 +68,17 @@ export class PluginOrchestrator {
       return { ok: false, error: `Unknown plugin '${pluginId}'` };
     }
 
-    const state = plugin.getState();
-    const stateError = this.getStateError(pluginId, state);
-    if (stateError) {
-      return { ok: false, error: stateError };
-    }
-
     const cmd = plugin.commands.find((c) => c.name === command);
     if (!cmd) {
       return { ok: false, error: `Unknown command '${command}' for plugin '${pluginId}'` };
+    }
+
+    if (!cmd.alwaysExecutable) {
+      const state = plugin.getState();
+      const stateError = this.getStateError(pluginId, state);
+      if (stateError) {
+        return { ok: false, error: stateError };
+      }
     }
 
     const context = this.buildCommandContext(plugin);
