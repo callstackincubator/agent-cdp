@@ -7,6 +7,9 @@ import {
   type IpcResponse,
   type TargetDescriptor,
 } from "@agent-cdp/protocol";
+import type { Command } from "commander";
+
+import type { CliDeps } from "../../cli/context.js";
 
 import type {
   AgentPlugin,
@@ -18,6 +21,11 @@ import type {
 } from "../../plugin.js";
 
 type CoreCommandRelay = (cmd: AgentRuntimeMeasurementCommand) => Promise<IpcResponse>;
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function registerCliCommands(_program: Command, _deps: CliDeps): void {
+  // No CLI commands for the runtime bridge yet.
+}
 
 interface RuntimeBindingCalledParams {
   name?: string;
