@@ -112,6 +112,10 @@ Commands are grouped as **daemon**, **target**, **console**, **runtime**, **netw
 
 For the runtime SDK bridge and in-app profiling, see `docs/SDK.md`.
 
+## Built-in plugin system
+
+For architecture, interface contract, and a step-by-step guide to adding a plugin, see [`docs/PLUGINS.md`](../../docs/PLUGINS.md).
+
 ## Runtime inspection
 
 Use `runtime` for live state inspection when you need more than captured console output.

@@ -43,7 +43,9 @@ Minimal operating guide for AI coding agents in this repo.
 - Keep files agent-readable:
   - avoid growing already-large router files
   - prefer extracting focused helpers before adding another major command branch to `src/cli.ts` or `src/daemon.ts`
-- Keep `packages/agent-cdp/src/daemon.ts` as an IPC command router and orchestrator, not the home for analysis logic.
+- Keep `packages/agent-cdp/src/daemon.ts` as the composition root and IPC router. Analysis logic belongs in domain modules. Plugin routing belongs in `PluginOrchestrator`.
+- Plugin commands arrive as `{ type: "plugin-command", pluginId, command, input }` and are intercepted in the daemon's IPC loop before reaching `AgentCdpCommandDispatcher`. Do not add plugin-specific branches to the dispatcher.
+- To add a new built-in plugin: implement `AgentPlugin` in `src/plugins/<id>/index.ts`, export `registerCliCommands`, register the plugin in `PluginOrchestrator` in `daemon.ts`, and add to `BUILT_IN_PLUGINS` in `cli/index.ts`. Nothing else changes.
 - Keep `packages/agent-cdp/src/cli.ts` focused on argument parsing, command dispatch, and formatting.
 - Put command logic in domain modules:
   - target discovery: `src/discovery.ts`
@@ -98,6 +100,9 @@ Minimal operating guide for AI coding agents in this repo.
 - JS CPU profiling: `src/js-profiler/*`
 - CLI help and parsing: `src/cli.ts`, `src/__tests__/cli.test.ts`
 - formatting: `src/formatters.ts`, `src/heap-snapshot/formatters.ts`, `src/js-memory/formatters.ts`, `src/js-profiler/formatters.ts`
+- plugin system interfaces: `src/plugin.ts`
+- plugin orchestrator (routing, lifecycle, dispatch): `src/plugin-orchestrator.ts`, `src/__tests__/plugin-orchestrator.test.ts`
+- runtime bridge plugin: `src/plugins/runtime-bridge/index.ts`, `src/__tests__/runtime-bridge.test.ts`
 
 ## Pull Requests
 - Start the PR description with end-user impact:

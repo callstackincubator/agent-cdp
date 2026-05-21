@@ -8,7 +8,11 @@ import { registerProfilingCommands } from "./commands/profiling.js";
 import { registerRuntimeAndConsoleCommands } from "./commands/runtime-console.js";
 import { registerTargetCommands } from "./commands/target.js";
 
-export function createProgram(deps: CliDeps = defaultCliDeps): Command {
+export interface AgentPluginRegistration {
+  registerCliCommands(program: Command, deps: CliDeps): void;
+}
+
+export function createProgram(deps: CliDeps = defaultCliDeps, plugins: AgentPluginRegistration[] = []): Command {
   const program = new Command();
   program.name("agent-cdp");
   program.description("CLI for Chrome DevTools Protocol workflows");
@@ -25,6 +29,10 @@ export function createProgram(deps: CliDeps = defaultCliDeps): Command {
   registerNetworkAndTraceCommands(program, deps);
   registerMemoryCommands(program, deps);
   registerProfilingCommands(program, deps);
+
+  for (const plugin of plugins) {
+    plugin.registerCliCommands(program, deps);
+  }
 
   return program;
 }
