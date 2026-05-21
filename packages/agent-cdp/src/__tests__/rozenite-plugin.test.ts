@@ -3,70 +3,81 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentPluginCommandContext, AgentPluginTargetContext, AgentPluginTargetSession } from "../plugin.js";
 import { PluginOrchestrator } from "../plugin-orchestrator.js";
 import { RozenitePlugin } from "../plugins/rozenite/index.js";
-import { DOMAIN_NAME, RUNTIME_GLOBAL } from "../plugins/rozenite/protocol.js";
-import type { CdpEventMessage, IpcResponse, TargetDescriptor } from "../types.js";
+import { ROZENITE_AGENT_BASE } from "../plugins/rozenite/protocol.js";
+import type { IpcResponse, TargetDescriptor } from "../types.js";
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const METRO_BASE = "http://localhost:8081";
+const DEVICE_ID = "test-device-id";
+const SESSION_URL = `${METRO_BASE}${ROZENITE_AGENT_BASE}/sessions`;
+const SESSION_ID_URL = `${SESSION_URL}/${DEVICE_ID}`;
+const SESSION_TOOLS_URL = `${SESSION_ID_URL}/tools`;
+const SESSION_CALL_URL = `${SESSION_ID_URL}/call-tool`;
+
+const SESSION_INFO = {
+  id: DEVICE_ID,
+  deviceId: DEVICE_ID,
+  deviceName: "Test Device",
+  status: "connected",
+  toolCount: 0,
+  createdAt: 0,
+  lastActivityAt: 0,
+};
+
+// ---------------------------------------------------------------------------
+// Targets
+// ---------------------------------------------------------------------------
+
+const RN_TARGET: TargetDescriptor = {
+  id: "react-native:bG9jYWxob3N0OjgwODE:page-1",
+  rawId: "page-1",
+  title: "Example",
+  kind: "react-native",
+  description: "",
+  webSocketDebuggerUrl: "ws://localhost:8081/devtools/page/page-1",
+  sourceUrl: METRO_BASE,
+  reactNative: { logicalDeviceId: DEVICE_ID, capabilities: {} },
+};
+
+const CHROME_TARGET: TargetDescriptor = {
+  ...RN_TARGET,
+  id: "chrome:bG9jYWxob3N0OjgwODE:page-1",
+  kind: "chrome",
+};
 
 // ---------------------------------------------------------------------------
 // Fake session
 // ---------------------------------------------------------------------------
 
-class FakeRozeniteSession implements AgentPluginTargetSession {
-  private eventListener: ((message: CdpEventMessage) => void) | null = null;
+class FakeSession implements AgentPluginTargetSession {
   private readonly disconnectListeners: ((error?: Error) => void)[] = [];
-  readonly sent: Array<{ method: string; params?: Record<string, unknown> }> = [];
+  readonly target: TargetDescriptor;
 
-  readonly target: TargetDescriptor = {
-    id: "rn:test:page-1",
-    rawId: "page-1",
-    title: "Example",
-    kind: "react-native",
-    description: "Test page",
-    webSocketDebuggerUrl: "ws://example.test/devtools/page/1",
-    sourceUrl: "http://example.test",
-  };
-
-  private readonly bindingName: string;
-
-  constructor(bindingName = "test_binding") {
-    this.bindingName = bindingName;
+  constructor(target: TargetDescriptor = RN_TARGET) {
+    this.target = target;
   }
 
   isConnected(): boolean {
     return true;
   }
 
-  send(method: string, params?: Record<string, unknown>): Promise<unknown> {
-    this.sent.push({ method, params });
-
-    if (method === "Runtime.evaluate") {
-      const expr = String(params?.expression ?? "");
-      if (expr.includes(`typeof ${RUNTIME_GLOBAL}`)) {
-        return Promise.resolve({ result: { value: true } });
-      }
-      if (expr.includes("BINDING_NAME")) {
-        return Promise.resolve({ result: { value: this.bindingName } });
-      }
-    }
+  send(): Promise<unknown> {
     return Promise.resolve(undefined);
   }
 
-  onEvent(listener: (message: CdpEventMessage) => void): () => void {
-    this.eventListener = listener;
-    return () => {
-      this.eventListener = null;
-    };
+  onEvent(): () => void {
+    return () => {};
   }
 
   onDisconnected(listener: (error?: Error) => void): () => void {
     this.disconnectListeners.push(listener);
     return () => {
-      const index = this.disconnectListeners.indexOf(listener);
-      if (index !== -1) this.disconnectListeners.splice(index, 1);
+      const i = this.disconnectListeners.indexOf(listener);
+      if (i >= 0) this.disconnectListeners.splice(i, 1);
     };
-  }
-
-  emitEvent(message: CdpEventMessage): void {
-    this.eventListener?.(message);
   }
 
   emitDisconnect(error?: Error): void {
@@ -74,24 +85,42 @@ class FakeRozeniteSession implements AgentPluginTargetSession {
       listener(error);
     }
   }
+}
 
-  emitBinding(payload: unknown): void {
-    this.emitEvent({
-      method: "Runtime.bindingCalled",
-      params: { name: this.bindingName, payload: JSON.stringify({ domain: DOMAIN_NAME, message: payload }) },
-    });
-  }
+// ---------------------------------------------------------------------------
+// Fetch mock helpers
+// ---------------------------------------------------------------------------
+
+type FetchResponse = Record<string, unknown>;
+
+function makeFetch(responses: Record<string, FetchResponse>) {
+  return vi.fn(async (url: string, init?: RequestInit) => {
+    const method = (init?.method ?? "GET").toUpperCase();
+    const key = `${method} ${url}`;
+    const body = responses[key] ?? responses[url] ?? { ok: false, error: { message: "Not mocked" } };
+    return {
+      ok: true,
+      json: async () => body,
+    };
+  });
+}
+
+function makeConnectFetch(extra: Record<string, FetchResponse> = {}) {
+  return makeFetch({
+    [`POST ${SESSION_URL}`]: { ok: true, result: { session: SESSION_INFO } },
+    ...extra,
+  });
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeTargetContext(session: FakeRozeniteSession, pluginId = "rozenite"): AgentPluginTargetContext {
-  return { pluginId, session };
+function makeTargetContext(session: FakeSession): AgentPluginTargetContext {
+  return { pluginId: "rozenite", session };
 }
 
-function makeCommandContext(plugin: RozenitePlugin, session: FakeRozeniteSession): AgentPluginCommandContext {
+function makeCommandContext(plugin: RozenitePlugin, session: FakeSession | null): AgentPluginCommandContext {
   return {
     pluginId: "rozenite",
     session,
@@ -102,7 +131,7 @@ function makeCommandContext(plugin: RozenitePlugin, session: FakeRozeniteSession
 async function runCommand(
   plugin: RozenitePlugin,
   name: string,
-  session: FakeRozeniteSession,
+  session: FakeSession | null,
   input?: unknown
 ): Promise<IpcResponse> {
   const cmd = (plugin.commands as ReturnType<typeof plugin.commands.find>[]).find((c) => c?.name === name);
@@ -116,33 +145,21 @@ async function runCommand(
   }
 }
 
-async function flushBootstrap(): Promise<void> {
-  for (let i = 0; i < 10; i++) {
+async function flushConnect(): Promise<void> {
+  for (let i = 0; i < 5; i++) {
     await Promise.resolve();
   }
 }
-
-const RN_TARGET: TargetDescriptor = {
-  id: "rn:test:page-1",
-  rawId: "page-1",
-  title: "Example",
-  kind: "react-native",
-  description: "",
-  webSocketDebuggerUrl: "ws://example.test/1",
-  sourceUrl: "http://example.test",
-};
-
-const CHROME_TARGET: TargetDescriptor = {
-  ...RN_TARGET,
-  id: "chrome:test:page-1",
-  kind: "chrome",
-};
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 describe("RozenitePlugin", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   describe("supportsTarget", () => {
     it("returns true for react-native targets", () => {
       const plugin = new RozenitePlugin();
@@ -155,289 +172,229 @@ describe("RozenitePlugin", () => {
     });
   });
 
-  describe("bootstrap", () => {
-    it("transitions to ready after successful bootstrap", async () => {
+  describe("connect", () => {
+    it("transitions to ready after successful session creation", async () => {
+      vi.stubGlobal("fetch", makeConnectFetch());
       const plugin = new RozenitePlugin();
-      const session = new FakeRozeniteSession();
+      const session = new FakeSession();
 
       expect(plugin.getState()).toEqual({ kind: "idle" });
       await plugin.onTargetSelected(makeTargetContext(session));
-      expect(plugin.getState()).toEqual({ kind: "waiting-for-runtime", reason: expect.stringContaining(RUNTIME_GLOBAL) });
+      expect(plugin.getState()).toEqual({ kind: "waiting-for-runtime", reason: expect.any(String) });
 
-      await flushBootstrap();
+      await flushConnect();
 
       expect(plugin.getState()).toEqual({ kind: "ready" });
     });
 
-    it("sends agent-session-ready after bootstrap completes", async () => {
+    it("sends deviceId in the POST body", async () => {
+      const mockFetch = makeConnectFetch();
+      vi.stubGlobal("fetch", mockFetch);
       const plugin = new RozenitePlugin();
-      const session = new FakeRozeniteSession();
 
-      await plugin.onTargetSelected(makeTargetContext(session));
-      await flushBootstrap();
+      await plugin.onTargetSelected(makeTargetContext(new FakeSession()));
+      await flushConnect();
 
-      const sendMessages = session.sent.filter(
-        (s) => s.method === "Runtime.evaluate" && String(s.params?.expression).includes("sendMessage")
+      const postCall = mockFetch.mock.calls.find(
+        ([url, init]) => url === SESSION_URL && (init as RequestInit)?.method === "POST"
       );
-      expect(sendMessages).toHaveLength(1);
-      expect(String(sendMessages[0].params?.expression)).toContain("agent-session-ready");
+      expect(postCall).toBeDefined();
+      expect(JSON.parse((postCall![1] as RequestInit).body as string)).toEqual({ deviceId: DEVICE_ID });
     });
 
-    it("transitions to error state when dispatcher global times out", async () => {
-      vi.useFakeTimers();
+    it("transitions to error when session creation fails", async () => {
+      vi.stubGlobal(
+        "fetch",
+        makeFetch({ [`POST ${SESSION_URL}`]: { ok: false, error: { message: "Rozenite not enabled" } } })
+      );
       const plugin = new RozenitePlugin();
-      const session = new FakeRozeniteSession();
 
-      vi.spyOn(session, "send").mockImplementation((method, params) => {
-        session.sent.push({ method, params });
-        if (method === "Runtime.evaluate" && String(params?.expression).includes(`typeof ${RUNTIME_GLOBAL}`)) {
-          return Promise.resolve({ result: { value: false } });
-        }
-        return Promise.resolve(undefined);
-      });
+      await plugin.onTargetSelected(makeTargetContext(new FakeSession()));
+      await flushConnect();
 
-      await plugin.onTargetSelected(makeTargetContext(session));
-      await vi.advanceTimersByTimeAsync(31_000);
-
-      expect(plugin.getState()).toEqual({ kind: "error", reason: expect.stringContaining(RUNTIME_GLOBAL) });
-      vi.useRealTimers();
+      expect(plugin.getState()).toEqual({ kind: "error", reason: "Rozenite not enabled" });
     });
 
-    it("does not transition to error when target is cleared during bootstrap", async () => {
-      vi.useFakeTimers();
+    it("transitions to error when fetch throws (Metro unreachable)", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => {
+          throw new Error("fetch failed");
+        })
+      );
       const plugin = new RozenitePlugin();
-      const session = new FakeRozeniteSession();
 
-      vi.spyOn(session, "send").mockImplementation((method, params) => {
-        session.sent.push({ method, params });
-        if (method === "Runtime.evaluate" && String(params?.expression).includes(`typeof ${RUNTIME_GLOBAL}`)) {
-          return Promise.resolve({ result: { value: false } });
-        }
-        return Promise.resolve(undefined);
-      });
+      await plugin.onTargetSelected(makeTargetContext(new FakeSession()));
+      await flushConnect();
+
+      expect(plugin.getState()).toEqual({ kind: "error", reason: "fetch failed" });
+    });
+
+    it("does not transition to error when target is cleared during connect", async () => {
+      vi.useFakeTimers();
+      // Never resolves
+      vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+      const plugin = new RozenitePlugin();
+      const session = new FakeSession();
 
       await plugin.onTargetSelected(makeTargetContext(session));
       await plugin.onTargetCleared({ pluginId: "rozenite", target: RN_TARGET, reason: "target-cleared" });
-      await vi.advanceTimersByTimeAsync(31_000);
 
       expect(plugin.getState()).toEqual({ kind: "idle" });
       vi.useRealTimers();
     });
 
     it("transitions back to idle after onTargetCleared", async () => {
+      vi.stubGlobal("fetch", makeConnectFetch({ [`DELETE ${SESSION_ID_URL}`]: { ok: true, result: { stopped: true } } }));
       const plugin = new RozenitePlugin();
-      const session = new FakeRozeniteSession();
 
-      await plugin.onTargetSelected(makeTargetContext(session));
-      await flushBootstrap();
+      await plugin.onTargetSelected(makeTargetContext(new FakeSession()));
+      await flushConnect();
       expect(plugin.getState()).toEqual({ kind: "ready" });
 
       await plugin.onTargetCleared({ pluginId: "rozenite", target: RN_TARGET, reason: "target-cleared" });
       expect(plugin.getState()).toEqual({ kind: "idle" });
     });
-  });
 
-  describe("tool registry", () => {
-    it("registers tools from register-tool messages with qualified names", async () => {
+    it("DELETEs the session on onTargetCleared", async () => {
+      const mockFetch = makeConnectFetch({
+        [`DELETE ${SESSION_ID_URL}`]: { ok: true, result: { stopped: true } },
+      });
+      vi.stubGlobal("fetch", mockFetch);
       const plugin = new RozenitePlugin();
-      const session = new FakeRozeniteSession();
-      const orchestrator = new PluginOrchestrator([plugin]);
 
-      await plugin.onTargetSelected(makeTargetContext(session));
-      await flushBootstrap();
+      await plugin.onTargetSelected(makeTargetContext(new FakeSession()));
+      await flushConnect();
+      await plugin.onTargetCleared({ pluginId: "rozenite", target: RN_TARGET, reason: "target-cleared" });
 
-      session.emitBinding({
-        type: "register-tool",
-        tools: [{ name: "myTool", description: "A tool", inputSchema: {} }],
-      });
-
-      const result = await runCommand(plugin, "tools", session);
-      expect(result).toEqual({
-        ok: true,
-        data: [{ name: "app.myTool", description: "A tool" }],
-      });
-
-      // orchestrator referenced to avoid unused variable lint
-      expect(orchestrator).toBeDefined();
+      const deleteCall = mockFetch.mock.calls.find(
+        ([url, init]) => url === SESSION_ID_URL && (init as RequestInit)?.method === "DELETE"
+      );
+      expect(deleteCall).toBeDefined();
     });
 
-    it("removes tools from unregister-tool messages", async () => {
+    it("stays ready when CDP session disconnects (HTTP session is independent)", async () => {
+      vi.stubGlobal("fetch", makeConnectFetch());
       const plugin = new RozenitePlugin();
-      const session = new FakeRozeniteSession();
+      const session = new FakeSession();
 
       await plugin.onTargetSelected(makeTargetContext(session));
-      await flushBootstrap();
-
-      session.emitBinding({
-        type: "register-tool",
-        tools: [
-          { name: "toolA", description: "A", inputSchema: {} },
-          { name: "toolB", description: "B", inputSchema: {} },
-        ],
-      });
-      session.emitBinding({ type: "unregister-tool", toolNames: ["app.toolA"] });
-
-      const result = await runCommand(plugin, "tools", session);
-      expect(result).toEqual({
-        ok: true,
-        data: [{ name: "app.toolB", description: "B" }],
-      });
-    });
-
-    it("clears registry on disconnect", async () => {
-      const plugin = new RozenitePlugin();
-      const session = new FakeRozeniteSession();
-
-      await plugin.onTargetSelected(makeTargetContext(session));
-      await flushBootstrap();
-
-      session.emitBinding({
-        type: "register-tool",
-        tools: [{ name: "myTool", description: "A tool", inputSchema: {} }],
-      });
+      await flushConnect();
+      expect(plugin.getState()).toEqual({ kind: "ready" });
 
       session.emitDisconnect();
-
-      const result = await runCommand(plugin, "status", session);
-      expect(result.ok).toBe(true);
-      expect((result.data as { toolCount: number }).toolCount).toBe(0);
+      expect(plugin.getState()).toEqual({ kind: "ready" });
     });
   });
 
   describe("commands", () => {
     let plugin: RozenitePlugin;
-    let session: FakeRozeniteSession;
+    let session: FakeSession;
 
     beforeEach(async () => {
+      vi.stubGlobal(
+        "fetch",
+        makeConnectFetch({
+          [SESSION_ID_URL]: {
+            ok: true,
+            result: { session: { ...SESSION_INFO, toolCount: 3 } },
+          },
+          [SESSION_TOOLS_URL]: {
+            ok: true,
+            result: {
+              tools: [
+                { name: "echo", description: "Echoes text", inputSchema: { type: "object" } },
+                { name: "getTimestamp", description: "Returns timestamp", inputSchema: { type: "object", properties: {} } },
+              ],
+            },
+          },
+          [`POST ${SESSION_CALL_URL}`]: {
+            ok: true,
+            result: { result: { value: 42 } },
+          },
+          [`DELETE ${SESSION_ID_URL}`]: { ok: true, result: { stopped: true } },
+        })
+      );
       plugin = new RozenitePlugin();
-      session = new FakeRozeniteSession();
+      session = new FakeSession();
       await plugin.onTargetSelected(makeTargetContext(session));
-      await flushBootstrap();
+      await flushConnect();
     });
 
     afterEach(async () => {
       await plugin.onTargetCleared({ pluginId: "rozenite", target: RN_TARGET, reason: "target-cleared" });
+      vi.unstubAllGlobals();
     });
 
     it("status returns state, toolCount, and target", async () => {
       const result = await runCommand(plugin, "status", session);
       expect(result).toEqual({
         ok: true,
-        data: { state: "ready", toolCount: 0, target: session.target },
+        data: { state: "ready", toolCount: 3, target: RN_TARGET },
       });
     });
 
     it("status works in waiting-for-runtime state (alwaysExecutable)", async () => {
+      vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
       const plugin2 = new RozenitePlugin();
-      const session2 = new FakeRozeniteSession();
+      const session2 = new FakeSession();
       const orchestrator = new PluginOrchestrator([plugin2]);
 
       void plugin2.onTargetSelected(makeTargetContext(session2));
 
-      // Use orchestrator.dispatch — status has alwaysExecutable so it bypasses state check
       const result = await orchestrator.dispatch("rozenite", "status");
       expect(result.ok).toBe(true);
       expect((result.data as { state: string }).state).toBe("waiting-for-runtime");
+      expect((result.data as { toolCount: number }).toolCount).toBe(0);
 
       await plugin2.onTargetCleared({ pluginId: "rozenite", target: RN_TARGET, reason: "target-cleared" });
     });
 
-    it("tool-schema returns inputSchema for a registered tool", async () => {
-      session.emitBinding({
-        type: "register-tool",
-        tools: [{ name: "myTool", description: "A tool", inputSchema: { type: "object" } }],
+    it("tools returns list of tool names and descriptions", async () => {
+      const result = await runCommand(plugin, "tools", session);
+      expect(result).toEqual({
+        ok: true,
+        data: [
+          { name: "echo", description: "Echoes text" },
+          { name: "getTimestamp", description: "Returns timestamp" },
+        ],
       });
+    });
 
-      const result = await runCommand(plugin, "tool-schema", session, { name: "app.myTool" });
+    it("tool-schema returns inputSchema for a registered tool", async () => {
+      const result = await runCommand(plugin, "tool-schema", session, { name: "echo" });
       expect(result).toEqual({ ok: true, data: { type: "object" } });
     });
 
     it("tool-schema returns error for unknown tool", async () => {
-      const result = await runCommand(plugin, "tool-schema", session, { name: "app.unknown" });
-      expect(result).toEqual({ ok: false, error: expect.stringContaining("app.unknown") });
+      const result = await runCommand(plugin, "tool-schema", session, { name: "unknown" });
+      expect(result).toEqual({ ok: false, error: expect.stringContaining("unknown") });
     });
 
-    it("call succeeds and returns tool result", async () => {
-      session.emitBinding({
-        type: "register-tool",
-        tools: [{ name: "myTool", description: "A tool", inputSchema: {} }],
-      });
-
-      let capturedCallId: string | undefined;
-      const originalSend = session.send.bind(session);
-      vi.spyOn(session, "send").mockImplementation((method, params) => {
-        if (method === "Runtime.evaluate") {
-          const expr = String(params?.expression ?? "");
-          if (expr.includes("tool-call")) {
-            // payload is double-JSON-encoded so quotes appear as \" in the expression value
-            const match = /\\"callId\\":\\"([a-f0-9-]+)/.exec(expr);
-            if (match) capturedCallId = match[1];
-          }
-        }
-        return originalSend(method, params);
-      });
-
-      const callPromise = runCommand(plugin, "call", session, { name: "app.myTool", arguments: { x: 1 } });
-
-      await Promise.resolve();
-      await Promise.resolve();
-
-      expect(capturedCallId).toBeDefined();
-      session.emitBinding({ type: "tool-result", callId: capturedCallId!, success: true, result: { value: 42 } });
-
-      const result = await callPromise;
-      expect(result).toEqual({ ok: true, data: { success: true, result: { value: 42 } } });
+    it("call returns tool result", async () => {
+      const result = await runCommand(plugin, "call", session, { name: "echo", arguments: { text: "hi" } });
+      expect(result).toEqual({ ok: true, data: { value: 42 } });
     });
 
-    it("call returns success:false data for tool-level failure (not an IPC error)", async () => {
-      session.emitBinding({
-        type: "register-tool",
-        tools: [{ name: "myTool", description: "A tool", inputSchema: {} }],
-      });
+    it("call returns error when Rozenite reports failure", async () => {
+      vi.stubGlobal(
+        "fetch",
+        makeConnectFetch({
+          [`POST ${SESSION_CALL_URL}`]: { ok: false, error: { message: "Tool threw: something went wrong" } },
+        })
+      );
+      const plugin2 = new RozenitePlugin();
+      await plugin2.onTargetSelected(makeTargetContext(new FakeSession()));
+      await flushConnect();
 
-      let capturedCallId: string | undefined;
-      const originalSend = session.send.bind(session);
-      vi.spyOn(session, "send").mockImplementation((method, params) => {
-        if (method === "Runtime.evaluate") {
-          const expr = String(params?.expression ?? "");
-          if (expr.includes("tool-call")) {
-            const match = /\\"callId\\":\\"([a-f0-9-]+)/.exec(expr);
-            if (match) capturedCallId = match[1];
-          }
-        }
-        return originalSend(method, params);
-      });
-
-      const callPromise = runCommand(plugin, "call", session, { name: "app.myTool" });
-
-      await Promise.resolve();
-      await Promise.resolve();
-
-      expect(capturedCallId).toBeDefined();
-      session.emitBinding({ type: "tool-result", callId: capturedCallId!, success: false, error: "something went wrong" });
-
-      const result = await callPromise;
-      expect(result).toEqual({ ok: true, data: { success: false, error: "something went wrong" } });
+      const result = await runCommand(plugin2, "call", new FakeSession(), { name: "echo" });
+      expect(result).toEqual({ ok: false, error: expect.stringContaining("something went wrong") });
     });
 
-    it("call rejects with IPC error on disconnect", async () => {
-      session.emitBinding({
-        type: "register-tool",
-        tools: [{ name: "myTool", description: "A tool", inputSchema: {} }],
-      });
-
-      const callPromise = runCommand(plugin, "call", session, { name: "app.myTool" });
-
-      await Promise.resolve();
-      session.emitDisconnect();
-
-      const result = await callPromise;
-      expect(result).toEqual({ ok: false, error: expect.stringContaining("disconnected") });
-    });
-
-    it("call returns error for unknown tool", async () => {
-      const result = await runCommand(plugin, "call", session, { name: "app.unknown" });
-      expect(result).toEqual({ ok: false, error: expect.stringContaining("app.unknown") });
+    it("call returns error for no active session", async () => {
+      const freshPlugin = new RozenitePlugin();
+      const result = await runCommand(freshPlugin, "call", null, { name: "echo" });
+      expect(result).toEqual({ ok: false, error: expect.stringContaining("No active Rozenite session") });
     });
   });
 });
