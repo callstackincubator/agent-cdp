@@ -66,6 +66,5 @@ export async function runBootstrap(
 
   await session.send("Runtime.addBinding", { name: bindingName });
 
-  console.log(`[Rozenite] Bootstrap: binding name = ${bindingName}`);
   return bindingName;
 }

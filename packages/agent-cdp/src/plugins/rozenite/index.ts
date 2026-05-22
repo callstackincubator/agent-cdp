@@ -69,10 +69,6 @@ export class RozenitePlugin implements AgentPlugin {
         return;
       }
       if (message.method !== "Runtime.bindingCalled") return;
-      console.log(
-        "[Rozenite] Runtime.bindingCalled event received:",
-        JSON.stringify(message.params),
-      );
       void this.handleBindingCalled(message.params);
     });
 
@@ -106,7 +102,7 @@ export class RozenitePlugin implements AgentPlugin {
     const signal = this.abortController?.signal;
 
     try {
-      const bindingName = await runBootstrap(session, signal);
+      await runBootstrap(session, signal);
       if (signal?.aborted) return;
 
       this.session = session;
@@ -121,12 +117,10 @@ export class RozenitePlugin implements AgentPlugin {
         payload: { sessionId: session.target.id },
       });
 
-      console.log(`[Rozenite] Ready. Binding: ${bindingName}. Target: ${session.target.id}`);
       this.state = { kind: "ready" };
     } catch (err) {
       const error = err as Error;
       if (error.name !== "AbortError" && !signal?.aborted) {
-        console.error("[Rozenite] Bootstrap failed:", error.message);
         this.state = { kind: "error", reason: error.message };
       }
     }
@@ -137,8 +131,7 @@ export class RozenitePlugin implements AgentPlugin {
     this.toolRegistry.clear();
     this.state = { kind: "waiting-for-runtime", reason: "Reconnecting after context reload..." };
     try {
-      const bindingName = await runBootstrap(session, this.abortController?.signal);
-      console.log(`[Rozenite] Reattached. Binding: ${bindingName}`);
+      await runBootstrap(session, this.abortController?.signal);
       await session.send("Runtime.evaluate", {
         expression: `void globalThis.${RUNTIME_GLOBAL}.initializeDomain(${JSON.stringify(ROZENITE_DOMAIN)})`,
       });
@@ -166,54 +159,35 @@ export class RozenitePlugin implements AgentPlugin {
 
   private handleBindingCalled(params: Record<string, unknown> | undefined): void {
     const rawPayload = params?.payload;
-    console.log(
-      "[Rozenite] bindingCalled name:",
-      params?.name,
-      "payload length:",
-      typeof rawPayload === "string" ? rawPayload.length : "N/A",
-    );
-
     if (typeof rawPayload !== "string") return;
 
     let envelope: { domain?: unknown; message?: unknown };
     try {
       envelope = JSON.parse(rawPayload) as typeof envelope;
     } catch {
-      console.warn("[Rozenite] Failed to parse binding payload:", rawPayload);
       return;
     }
 
-    console.log("[Rozenite] Envelope domain:", envelope.domain);
     if (envelope.domain !== ROZENITE_DOMAIN) return;
 
     const msg = envelope.message as RozeniteDevToolsMessage | undefined;
-    if (!msg || msg.pluginId !== AGENT_PLUGIN_ID) {
-      console.log("[Rozenite] Ignoring message from pluginId:", msg?.pluginId);
-      return;
-    }
-
-    console.log("[Rozenite] Message type:", msg.type, "payload:", JSON.stringify(msg.payload));
+    if (!msg || msg.pluginId !== AGENT_PLUGIN_ID) return;
 
     switch (msg.type) {
       case "register-tool": {
         const { tools } = msg.payload as RozeniteRegisterToolPayload;
         this.toolRegistry.register(tools);
-        console.log("[Rozenite] Registered tools:", tools.map((t) => t.name).join(", "));
         break;
       }
       case "unregister-tool": {
         const { toolNames } = msg.payload as RozeniteUnregisterToolPayload;
         this.toolRegistry.unregister(toolNames);
-        console.log("[Rozenite] Unregistered tools:", toolNames.join(", "));
         break;
       }
       case "tool-result": {
         const { callId, success, result, error } = msg.payload as RozeniteToolResultPayload;
         const pending = this.pendingCalls.get(callId);
-        if (!pending) {
-          console.warn("[Rozenite] Received tool-result for unknown callId:", callId);
-          return;
-        }
+        if (!pending) return;
         this.pendingCalls.delete(callId);
         clearTimeout(pending.timeoutId);
         if (success) {
@@ -223,8 +197,6 @@ export class RozenitePlugin implements AgentPlugin {
         }
         break;
       }
-      default:
-        console.log("[Rozenite] Unknown message type:", msg.type);
     }
   }
 
