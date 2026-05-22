@@ -6,13 +6,26 @@ import type {
   AgentPluginDetachContext,
   AgentPluginState,
   AgentPluginTargetContext,
+  AgentPluginTargetSession,
 } from "../../plugin.js";
+import { runBootstrap } from "./bootstrap.js";
 import {
-  ROZENITE_AGENT_BASE,
-  type RozeniteApiResponse,
-  type RozeniteApiTool,
-  type RozeniteSessionInfo,
+  AGENT_PLUGIN_ID,
+  ROZENITE_DOMAIN,
+  RUNTIME_GLOBAL,
+  type RozeniteDevToolsMessage,
+  type RozeniteRegisterToolPayload,
+  type RozeniteToolCallPayload,
+  type RozeniteToolResultPayload,
+  type RozeniteUnregisterToolPayload,
 } from "./protocol.js";
+import { ToolRegistry } from "./tool-registry.js";
+
+interface PendingCall {
+  resolve: (value: unknown) => void;
+  reject: (error: Error) => void;
+  timeoutId: ReturnType<typeof setTimeout>;
+}
 
 export class RozenitePlugin implements AgentPlugin {
   readonly id = "rozenite";
@@ -21,9 +34,11 @@ export class RozenitePlugin implements AgentPlugin {
   readonly commands: readonly AgentPluginCommand[];
 
   private state: AgentPluginState = { kind: "idle" };
-  private sessionId: string | null = null;
-  private metroBaseUrl: string | null = null;
+  private session: AgentPluginTargetSession | null = null;
+  private removeEventListener: (() => void) | null = null;
   private abortController: AbortController | null = null;
+  private readonly toolRegistry = new ToolRegistry();
+  private readonly pendingCalls = new Map<string, PendingCall>();
 
   constructor() {
     this.commands = this.buildCommands();
@@ -38,11 +53,30 @@ export class RozenitePlugin implements AgentPlugin {
   }
 
   async onTargetSelected(ctx: AgentPluginTargetContext): Promise<void> {
-    this.state = { kind: "waiting-for-runtime", reason: "Connecting to Rozenite HTTP agent..." };
-    this.sessionId = null;
-    this.metroBaseUrl = null;
+    this.detach();
+    this.state = { kind: "waiting-for-runtime", reason: "Bootstrapping Rozenite CDP bridge..." };
     this.abortController = new AbortController();
-    void this.connect(ctx.session.target);
+
+    const session = ctx.session;
+
+    // Register event listener BEFORE calling initializeDomain to avoid missing early events.
+    this.removeEventListener = session.onEvent((message) => {
+      if (
+        message.method === "Runtime.executionContextsCleared" ||
+        message.method === "Runtime.executionContextCreated"
+      ) {
+        void this.reattach(session);
+        return;
+      }
+      if (message.method !== "Runtime.bindingCalled") return;
+      console.log(
+        "[Rozenite] Runtime.bindingCalled event received:",
+        JSON.stringify(message.params),
+      );
+      void this.handleBindingCalled(message.params);
+    });
+
+    void this.attach(session);
   }
 
   async onTargetReconnected(ctx: AgentPluginTargetContext): Promise<void> {
@@ -50,58 +84,147 @@ export class RozenitePlugin implements AgentPlugin {
   }
 
   async onTargetCleared(_ctx: AgentPluginDetachContext): Promise<void> {
-    await this.teardown();
+    this.detach();
+  }
+
+  private detach(): void {
+    this.abortController?.abort();
+    this.abortController = null;
+    this.removeEventListener?.();
+    this.removeEventListener = null;
+    this.session = null;
+    this.toolRegistry.clear();
+    for (const [, pending] of this.pendingCalls) {
+      clearTimeout(pending.timeoutId);
+      pending.reject(new Error("Session detached"));
+    }
+    this.pendingCalls.clear();
     this.state = { kind: "idle" };
   }
 
-  private async teardown(): Promise<void> {
-    const ctrl = this.abortController;
-    this.abortController = null;
-    ctrl?.abort();
-
-    const { sessionId, metroBaseUrl } = this;
-    this.sessionId = null;
-    this.metroBaseUrl = null;
-
-    if (sessionId && metroBaseUrl) {
-      void fetch(`${metroBaseUrl}${ROZENITE_AGENT_BASE}/sessions/${sessionId}`, {
-        method: "DELETE",
-      }).catch(() => {});
-    }
-  }
-
-  private async connect(target: TargetDescriptor): Promise<void> {
-    const metroBaseUrl = target.sourceUrl;
-    const deviceId = target.reactNative?.logicalDeviceId;
+  private async attach(session: AgentPluginTargetSession): Promise<void> {
     const signal = this.abortController?.signal;
 
     try {
-      const body: Record<string, string> = {};
-      if (deviceId) body.deviceId = deviceId;
-
-      const response = await fetch(`${metroBaseUrl}${ROZENITE_AGENT_BASE}/sessions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal,
-      });
-
-      const json = (await response.json()) as RozeniteApiResponse<{ session: RozeniteSessionInfo }>;
-
+      const bindingName = await runBootstrap(session, signal);
       if (signal?.aborted) return;
 
-      if (!json.ok) {
-        throw new Error(json.error?.message ?? "Failed to create Rozenite session");
-      }
+      this.session = session;
 
-      this.metroBaseUrl = metroBaseUrl;
-      this.sessionId = json.result!.session.id;
+      await session.send("Runtime.evaluate", {
+        expression: `void globalThis.${RUNTIME_GLOBAL}.initializeDomain(${JSON.stringify(ROZENITE_DOMAIN)})`,
+      });
+
+      await this.sendDomainMessage(session, {
+        pluginId: AGENT_PLUGIN_ID,
+        type: "agent-session-ready",
+        payload: { sessionId: session.target.id },
+      });
+
+      console.log(`[Rozenite] Ready. Binding: ${bindingName}. Target: ${session.target.id}`);
       this.state = { kind: "ready" };
     } catch (err) {
       const error = err as Error;
       if (error.name !== "AbortError" && !signal?.aborted) {
+        console.error("[Rozenite] Bootstrap failed:", error.message);
         this.state = { kind: "error", reason: error.message };
       }
+    }
+  }
+
+  private async reattach(session: AgentPluginTargetSession): Promise<void> {
+    if (this.session !== session || !session.isConnected()) return;
+    this.toolRegistry.clear();
+    this.state = { kind: "waiting-for-runtime", reason: "Reconnecting after context reload..." };
+    try {
+      const bindingName = await runBootstrap(session, this.abortController?.signal);
+      console.log(`[Rozenite] Reattached. Binding: ${bindingName}`);
+      await session.send("Runtime.evaluate", {
+        expression: `void globalThis.${RUNTIME_GLOBAL}.initializeDomain(${JSON.stringify(ROZENITE_DOMAIN)})`,
+      });
+      await this.sendDomainMessage(session, {
+        pluginId: AGENT_PLUGIN_ID,
+        type: "agent-session-ready",
+        payload: { sessionId: session.target.id },
+      });
+      this.state = { kind: "ready" };
+    } catch {
+      // A later reconnect will retry; ignore errors here.
+    }
+  }
+
+  private async sendDomainMessage(
+    session: AgentPluginTargetSession,
+    message: RozeniteDevToolsMessage,
+  ): Promise<void> {
+    const serialized = JSON.stringify(message);
+    const escaped = JSON.stringify(serialized);
+    await session.send("Runtime.evaluate", {
+      expression: `globalThis.${RUNTIME_GLOBAL}.sendMessage(${JSON.stringify(ROZENITE_DOMAIN)}, ${escaped})`,
+    });
+  }
+
+  private handleBindingCalled(params: Record<string, unknown> | undefined): void {
+    const rawPayload = params?.payload;
+    console.log(
+      "[Rozenite] bindingCalled name:",
+      params?.name,
+      "payload length:",
+      typeof rawPayload === "string" ? rawPayload.length : "N/A",
+    );
+
+    if (typeof rawPayload !== "string") return;
+
+    let envelope: { domain?: unknown; message?: unknown };
+    try {
+      envelope = JSON.parse(rawPayload) as typeof envelope;
+    } catch {
+      console.warn("[Rozenite] Failed to parse binding payload:", rawPayload);
+      return;
+    }
+
+    console.log("[Rozenite] Envelope domain:", envelope.domain);
+    if (envelope.domain !== ROZENITE_DOMAIN) return;
+
+    const msg = envelope.message as RozeniteDevToolsMessage | undefined;
+    if (!msg || msg.pluginId !== AGENT_PLUGIN_ID) {
+      console.log("[Rozenite] Ignoring message from pluginId:", msg?.pluginId);
+      return;
+    }
+
+    console.log("[Rozenite] Message type:", msg.type, "payload:", JSON.stringify(msg.payload));
+
+    switch (msg.type) {
+      case "register-tool": {
+        const { tools } = msg.payload as RozeniteRegisterToolPayload;
+        this.toolRegistry.register(tools);
+        console.log("[Rozenite] Registered tools:", tools.map((t) => t.name).join(", "));
+        break;
+      }
+      case "unregister-tool": {
+        const { toolNames } = msg.payload as RozeniteUnregisterToolPayload;
+        this.toolRegistry.unregister(toolNames);
+        console.log("[Rozenite] Unregistered tools:", toolNames.join(", "));
+        break;
+      }
+      case "tool-result": {
+        const { callId, success, result, error } = msg.payload as RozeniteToolResultPayload;
+        const pending = this.pendingCalls.get(callId);
+        if (!pending) {
+          console.warn("[Rozenite] Received tool-result for unknown callId:", callId);
+          return;
+        }
+        this.pendingCalls.delete(callId);
+        clearTimeout(pending.timeoutId);
+        if (success) {
+          pending.resolve(result);
+        } else {
+          pending.reject(new Error(error ?? "Tool call failed"));
+        }
+        break;
+      }
+      default:
+        console.log("[Rozenite] Unknown message type:", msg.type);
     }
   }
 
@@ -113,20 +236,10 @@ export class RozenitePlugin implements AgentPlugin {
         alwaysExecutable: true,
         execute: async (ctx) => {
           const state = ctx.getState();
-          let toolCount = 0;
-          if (state.kind === "ready" && this.sessionId && this.metroBaseUrl) {
-            try {
-              const resp = await fetch(
-                `${this.metroBaseUrl}${ROZENITE_AGENT_BASE}/sessions/${this.sessionId}`
-              );
-              const json = (await resp.json()) as RozeniteApiResponse<{ session: RozeniteSessionInfo }>;
-              if (json.ok && json.result) toolCount = json.result.session.toolCount;
-            } catch {}
-          }
           return {
             state: state.kind,
             ...(state.kind === "error" ? { error: state.reason } : {}),
-            toolCount,
+            toolCount: this.toolRegistry.size(),
             target: ctx.session?.target ?? null,
           };
         },
@@ -135,12 +248,9 @@ export class RozenitePlugin implements AgentPlugin {
         name: "tools",
         summary: "List registered Rozenite tools",
         execute: async () => {
-          const { sessionId, metroBaseUrl } = this;
-          if (!sessionId || !metroBaseUrl) throw new Error("No active Rozenite session");
-          const resp = await fetch(`${metroBaseUrl}${ROZENITE_AGENT_BASE}/sessions/${sessionId}/tools`);
-          const json = (await resp.json()) as RozeniteApiResponse<{ tools: RozeniteApiTool[] }>;
-          if (!json.ok) throw new Error(json.error?.message ?? "Failed to list tools");
-          return (json.result?.tools ?? []).map((t) => ({ name: t.name, description: t.description }));
+          return this.toolRegistry
+            .getAll()
+            .map((t) => ({ name: t.name, description: t.description }));
         },
       },
       {
@@ -148,12 +258,7 @@ export class RozenitePlugin implements AgentPlugin {
         summary: "Show input schema for a Rozenite tool",
         execute: async (_ctx, input) => {
           const { name } = input as { name: string };
-          const { sessionId, metroBaseUrl } = this;
-          if (!sessionId || !metroBaseUrl) throw new Error("No active Rozenite session");
-          const resp = await fetch(`${metroBaseUrl}${ROZENITE_AGENT_BASE}/sessions/${sessionId}/tools`);
-          const json = (await resp.json()) as RozeniteApiResponse<{ tools: RozeniteApiTool[] }>;
-          if (!json.ok) throw new Error(json.error?.message ?? "Failed to fetch tools");
-          const tool = (json.result?.tools ?? []).find((t) => t.name === name);
+          const tool = this.toolRegistry.get(name);
           if (!tool) throw new Error(`Tool '${name}' not found`);
           return tool.inputSchema;
         },
@@ -163,19 +268,32 @@ export class RozenitePlugin implements AgentPlugin {
         summary: "Call a Rozenite tool",
         execute: async (_ctx, input) => {
           const { name, arguments: args } = input as { name: string; arguments?: unknown };
-          const { sessionId, metroBaseUrl } = this;
-          if (!sessionId || !metroBaseUrl) throw new Error("No active Rozenite session");
-          const resp = await fetch(
-            `${metroBaseUrl}${ROZENITE_AGENT_BASE}/sessions/${sessionId}/call-tool`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ toolName: name, args: args ?? null }),
-            }
-          );
-          const json = (await resp.json()) as RozeniteApiResponse<{ result: unknown }>;
-          if (!json.ok) throw new Error(json.error?.message ?? "Tool call failed");
-          return json.result?.result;
+          const session = this.session;
+          if (!session) throw new Error("No active Rozenite session");
+
+          const callId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+          const resultPromise = new Promise<unknown>((resolve, reject) => {
+            const timeoutId = setTimeout(() => {
+              this.pendingCalls.delete(callId);
+              reject(new Error("Tool call timeout"));
+            }, 30_000);
+            this.pendingCalls.set(callId, { resolve, reject, timeoutId });
+          });
+
+          const payload: RozeniteToolCallPayload = {
+            callId,
+            toolName: name,
+            arguments: args ?? null,
+          };
+
+          await this.sendDomainMessage(session, {
+            pluginId: AGENT_PLUGIN_ID,
+            type: "tool-call",
+            payload,
+          });
+
+          return resultPromise;
         },
       },
     ];
