@@ -71,8 +71,6 @@ one labelled with your app name or `"React Native"` in the target list.
 
 ### Rozenite agent tools
 
-For in-app tools registered via Rozenite (RN with `@rozenite/*`, or Chrome with the Rozenite extension):
-
 ```bash
 agent-cdp skills get rozenite
 ```
