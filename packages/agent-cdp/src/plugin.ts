@@ -41,6 +41,7 @@ export interface AgentPluginCommand {
   readonly name: string;
   readonly summary: string;
   readonly description?: string;
+  readonly alwaysExecutable?: boolean;
 
   execute(context: AgentPluginCommandContext, input?: unknown): Promise<unknown>;
 }

@@ -69,6 +69,12 @@ Requirements:
 Metro exposes multiple targets (JS runtime, Hermes debugger, etc.). Pick the
 one labelled with your app name or `"React Native"` in the target list.
 
+### Rozenite agent tools
+
+```bash
+agent-cdp skills get rozenite
+```
+
 ## Console capture
 
 ```bash
@@ -97,6 +103,14 @@ agent-cdp skills get network
 ```
 
 That skill contains session behavior, common workflows, body inspection guidance, and network-specific troubleshooting.
+
+## Rozenite
+
+For Rozenite in-app agent tools (`rozenite status|tools|call`), run:
+
+```bash
+agent-cdp skills get rozenite
+```
 
 ## Trace recording
 

@@ -16,6 +16,8 @@ import {
   type TraceStopResponse,
 } from '@agent-cdp/sdk';
 import { useState } from 'react';
+
+import { ROZENITE_TOOL_COUNT, useRozeniteBridge } from '@/hooks/use-rozenite-bridge';
 import { Pressable, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -201,6 +203,38 @@ function formatMaybeMs(value: number | null) {
 
 function formatBytes(value: number) {
   return `${Math.round(value / 1024)} KB`;
+}
+
+const rozeniteAvailable =
+  typeof (globalThis as Record<string, unknown>).__FUSEBOX_REACT_DEVTOOLS_DISPATCHER__ !== 'undefined';
+
+function RozeniteBridgeSection() {
+  const { lastCall } = useRozeniteBridge();
+
+  return (
+    <ThemedView style={styles.sectionCard} type="backgroundElement">
+      <ThemedText type="smallBold">Rozenite Agent Tools</ThemedText>
+      <ThemedText style={styles.sectionHelp} themeColor="textSecondary" type="small">
+        {ROZENITE_TOOL_COUNT} test tools registered: app.echo, app.getTimestamp, app.getPlaygroundInfo.
+        Call them with: agent-cdp rozenite call app.echo --input '{`{"text":"hello"}`}'
+      </ThemedText>
+      <ThemedView style={styles.statusCard}>
+        <ThemedText type="small">Tools registered: {ROZENITE_TOOL_COUNT}</ThemedText>
+        {lastCall ? (
+          <>
+            <ThemedText type="small">Last call: {lastCall.name}</ThemedText>
+            <ThemedText selectable style={styles.sessionId} type="code">
+              {JSON.stringify(lastCall.result)}
+            </ThemedText>
+          </>
+        ) : (
+          <ThemedText style={styles.statusMessage} themeColor="textSecondary" type="small">
+            No tool calls yet. Use agent-cdp rozenite call to invoke a tool.
+          </ThemedText>
+        )}
+      </ThemedView>
+    </ThemedView>
+  );
 }
 
 export default function HomeScreen() {
@@ -655,6 +689,7 @@ export default function HomeScreen() {
               <ScenarioButton label="Clear retained batches" onPress={clearRetainedBatches} variant="danger" />
             </ThemedView>
           </ThemedView>
+          {rozeniteAvailable && <RozeniteBridgeSection />}
           <ThemedView style={styles.sectionCard} type="backgroundElement">
             <ThemedText type="smallBold">SDK Testing</ThemedText>
             <ThemedText style={styles.sectionHelp} themeColor="textSecondary" type="small">

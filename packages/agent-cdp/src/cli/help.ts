@@ -110,6 +110,12 @@ CPU Profiling:
   profile cpu export [--session ID]
   profile cpu source-maps [--session ID]
 
+Rozenite:
+  rozenite status
+  rozenite tools
+  rozenite tool-schema <name>
+  rozenite call <name> [--input JSON]
+
 Skills:
   skills list             List available skill files
   skills get <name>       Print a skill file (e.g. 'skills get core')

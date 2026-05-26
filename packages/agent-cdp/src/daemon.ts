@@ -16,6 +16,7 @@ import { JsProfiler } from "./js-profiler/index.js";
 import { NetworkManager } from "./network/index.js";
 import { PluginOrchestrator } from "./plugin-orchestrator.js";
 import { AgentRuntimeBridgePlugin } from "./plugins/runtime-bridge/index.js";
+import { RozenitePlugin } from "./plugins/rozenite/index.js";
 import { createTargetProviders } from "./providers.js";
 import { RuntimeManager } from "./runtime/index.js";
 import { SessionManager } from "./session-manager.js";
@@ -52,7 +53,8 @@ class Daemon {
 
   constructor() {
     const bridgePlugin = new AgentRuntimeBridgePlugin((cmd) => this.commandDispatcher.dispatch(cmd));
-    this.orchestrator = new PluginOrchestrator([bridgePlugin]);
+    const rozenitePlugin = new RozenitePlugin();
+    this.orchestrator = new PluginOrchestrator([bridgePlugin, rozenitePlugin]);
 
     this.commandDispatcher = new AgentCdpCommandDispatcher({
       startedAt: this.startedAt,
