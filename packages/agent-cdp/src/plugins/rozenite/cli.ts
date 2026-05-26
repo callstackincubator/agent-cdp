@@ -8,7 +8,9 @@ function printJson(data: unknown): void {
 }
 
 export function registerRozeniteCliCommands(program: Command, deps: CliDeps): void {
-  const rozenite = program.command("rozenite").description("Rozenite React Native devtools bridge");
+  const rozenite = program
+    .command("rozenite")
+    .description("Rozenite in-app agent tools (RN; Chrome with Rozenite extension)");
 
   rozenite
     .command("status")

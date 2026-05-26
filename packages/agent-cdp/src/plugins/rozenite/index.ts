@@ -30,7 +30,7 @@ interface PendingCall {
 export class RozenitePlugin implements AgentPlugin {
   readonly id = "rozenite";
   readonly displayName = "Rozenite";
-  readonly description = "Rozenite React Native agent bridge";
+  readonly description = "Rozenite in-app agent tools (React Native; Chrome with Rozenite extension)";
   readonly commands: readonly AgentPluginCommand[];
 
   private state: AgentPluginState = { kind: "idle" };
@@ -49,10 +49,17 @@ export class RozenitePlugin implements AgentPlugin {
   }
 
   supportsTarget(target: TargetDescriptor): boolean {
-    return target.kind === "react-native";
+    return target.kind === "react-native" || target.kind === "chrome";
   }
 
   async onTargetSelected(ctx: AgentPluginTargetContext): Promise<void> {
+    if (!this.supportsTarget(ctx.session.target)) {
+      this.state = {
+        kind: "unsupported-target",
+        reason: "only React Native and Chrome (with Rozenite extension) are supported",
+      };
+      return;
+    }
     this.detach();
     this.state = { kind: "waiting-for-runtime", reason: "Bootstrapping Rozenite CDP bridge..." };
     this.abortController = new AbortController();
@@ -76,6 +83,13 @@ export class RozenitePlugin implements AgentPlugin {
   }
 
   async onTargetReconnected(ctx: AgentPluginTargetContext): Promise<void> {
+    if (!this.supportsTarget(ctx.session.target)) {
+      this.state = {
+        kind: "unsupported-target",
+        reason: "only React Native and Chrome (with Rozenite extension) are supported",
+      };
+      return;
+    }
     return this.onTargetSelected(ctx);
   }
 

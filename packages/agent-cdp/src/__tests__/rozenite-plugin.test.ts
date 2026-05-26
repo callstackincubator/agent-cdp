@@ -178,9 +178,9 @@ describe("RozenitePlugin", () => {
       expect(plugin.supportsTarget(RN_TARGET)).toBe(true);
     });
 
-    it("returns false for chrome targets", () => {
+    it("returns true for chrome targets", () => {
       const plugin = new RozenitePlugin();
-      expect(plugin.supportsTarget(CHROME_TARGET)).toBe(false);
+      expect(plugin.supportsTarget(CHROME_TARGET)).toBe(true);
     });
   });
 
