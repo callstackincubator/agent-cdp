@@ -1,9 +1,27 @@
 import WebSocket from "ws";
+import type { ClientOptions } from "ws";
 
 import type { CdpEventMessage, CdpTransport, TargetDescriptor } from "./types.js";
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function getReactNativeWebSocketOptions(target: TargetDescriptor): ClientOptions | undefined {
+  if (target.kind !== "react-native") {
+    return undefined;
+  }
+
+  const origin = getUrlOrigin(target.sourceUrl) ?? getUrlOrigin(target.webSocketDebuggerUrl.replace(/^ws/, "http"));
+  return origin ? { headers: { Origin: origin } } : undefined;
+}
+
+function getUrlOrigin(url: string): string | null {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
 }
 
 export class WebSocketCdpTransport implements CdpTransport {
@@ -20,7 +38,7 @@ export class WebSocketCdpTransport implements CdpTransport {
     }
 
     await new Promise<void>((resolve, reject) => {
-      const socket = new WebSocket(this.target.webSocketDebuggerUrl);
+      const socket = new WebSocket(this.target.webSocketDebuggerUrl, getReactNativeWebSocketOptions(this.target));
 
       socket.once("open", () => {
         this.socket = socket;
