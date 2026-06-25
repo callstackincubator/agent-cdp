@@ -68,6 +68,10 @@ Requirements:
 
 Metro exposes multiple targets (JS runtime, Hermes debugger, etc.). Pick the
 one labelled with your app name or `"React Native"` in the target list.
+React Native and Hermes targets may implement only part of CDP. If a memory,
+trace, or performance command reports an unsupported method, keep the target
+selected and switch to the supported memory workflow: `memory usage sample --gc`
+for a quick signal, then heap snapshots/diffs for retained object proof.
 
 ### Rozenite agent tools
 
@@ -180,6 +184,9 @@ agent-cdp memory snapshot leak-triplet --baseline 1 --action 2 --cleanup 3
 
 Use `--gc` before capturing to force a garbage collection so only truly
 retained objects appear in the snapshot.
+For React Native/Hermes targets, prefer this snapshot-based workflow when
+confirming leaks because browser-only `Memory.*` or `Performance.*` methods may
+not be available.
 
 ## JS heap usage monitor
 

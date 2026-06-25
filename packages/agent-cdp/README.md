@@ -71,6 +71,7 @@ React Native (example Metro URL):
 
 ```sh
 agent-cdp target list --url http://127.0.0.1:8081
+agent-cdp target select <target-id>
 ```
 
 Node.js (example default inspect port after starting your app with `node --inspect …`):
@@ -99,6 +100,8 @@ agent-cdp target clear
 - **Memory allocation** — `memory allocation` commands for sampled allocation timeline summaries, top allocators, bucketed growth, leak-oriented signals, and raw artifact export
 - **Memory allocation timeline** — `memory allocation-timeline` commands for DevTools-style heap allocation timeline capture, bucket summaries, linked final snapshot analysis, and raw artifact export
 - **CPU profiling** — `profile cpu` commands to record CPU profiles, list sessions, hotspots, stacks, diffs, and optional source map help
+
+React Native targets can expose a smaller CDP surface than Chrome. For JS leak checks, prefer `memory usage sample --gc` for a quick heap signal, then use `memory snapshot capture --gc`, `memory snapshot diff`, and `memory snapshot leak-triplet` to confirm retained objects and inspect retainers.
 
 **4. Stop the daemon**
 
