@@ -1,6 +1,6 @@
 {
   "name": "@agent-cdp/protocol",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Shared protocol types for agent-cdp daemon, CLI, and SDK integrations.",
   "type": "module",
   "repository": {
