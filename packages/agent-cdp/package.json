@@ -5,7 +5,8 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/callstackincubator/agent-cdp.git"
+    "url": "git+https://github.com/callstackincubator/agent-cdp.git",
+    "directory": "packages/agent-cdp"
   },
   "bugs": {
     "url": "https://github.com/callstackincubator/agent-cdp/issues"

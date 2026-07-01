@@ -3,6 +3,16 @@
   "version": "1.6.0",
   "description": "Shared protocol types for agent-cdp daemon, CLI, and SDK integrations.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/callstackincubator/agent-cdp.git",
+    "directory": "packages/protocol"
+  },
+  "bugs": {
+    "url": "https://github.com/callstackincubator/agent-cdp/issues"
+  },
+  "homepage": "https://github.com/callstackincubator/agent-cdp/tree/master/packages/protocol#readme",
+  "license": "MIT",
   "types": "./src/index.ts",
   "react-native": "./src/index.ts",
   "exports": {
