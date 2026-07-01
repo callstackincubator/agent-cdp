@@ -3,6 +3,16 @@
   "version": "1.6.0",
   "description": "Programmatic SDK for agent-cdp runtime integrations.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/callstackincubator/agent-cdp.git",
+    "directory": "packages/sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/callstackincubator/agent-cdp/issues"
+  },
+  "homepage": "https://github.com/callstackincubator/agent-cdp/tree/master/packages/sdk#readme",
+  "license": "MIT",
   "types": "./src/index.ts",
   "react-native": "./src/index.ts",
   "exports": {
